@@ -1,0 +1,49 @@
+# 每日管线：抓取 → LLM 整理打标签 → 写入 content/ → 构建 public/ → 提交
+# 替代 ai-daily 的 systemd timer；由 GitHub Actions 定时触发。
+name: Daily Espresso Digest
+
+on:
+  schedule:
+    # 每天 08:00 (UTC+8 = 00:00 UTC) 运行；如需其它时区改这里
+    - cron: "0 0 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install jinja2 markdown feedparser httpx python-dotenv
+
+      - name: Run pipeline (fetch + score + build)
+        env:
+          # 在仓库 Secrets 中配置；不启用 LLM 时留空也能用规则回退
+          ESPRESSO_LLM_API_KEY: ${{ secrets.ESPRESSO_LLM_API_KEY }}
+          # 配了 key 时强制启用 LLM（覆盖 config.example.toml 的 enabled=false）；
+          # 没配 key 时 pipeline 自动回退规则评分。
+          ESPRESSO_LLM_ENABLED: "true"
+        run: python -m src.pipeline
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name "espresso-bot"
+          git config user.email "bot@espresso.daily"
+          git add content public
+          if git diff --cached --quiet; then
+            echo "无更新"
+          else
+            git commit -m "daily: $(date +'%Y-%m-%d') update"
+            git push
+          fi

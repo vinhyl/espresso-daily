@@ -1,0 +1,157 @@
+{# ==========================================================================
+   宏库（编辑工业风）
+   ========================================================================== #}
+
+{# 单日资讯流条目（day 页 / 标签页复用） #}
+{% macro entry_card(e, rel, show_date=true, show_tags=true) %}
+<article class="entry" id="{{ e.slug }}"{% if e.score > 0 %} data-score="{{ e.score }}"{% endif %}>
+  <div class="entry-meta">
+    {% if show_date %}<a class="date mono" href="{{ rel }}days/{{ e.date }}.html">{{ e.date }}</a>{% endif %}
+    {% if show_tags and e.tags %}<span class="tags-inline">{% for t in e.tags %}<a class="tag-mini" href="{{ rel }}tags/{{ t | urlencode }}.html">#{{ t }}</a>{% endfor %}</span>{% endif %}
+  </div>
+  <div class="entry-title-row">
+    <h2 class="entry-title serif">{{ e.title }}</h2>
+    {% if e.score > 0 %}<span class="score-badge mono" title="编辑评分 0-100" aria-label="编辑评分 {{ e.score }}">{{ e.score }}</span>{% endif %}
+  </div>
+  {% if e.source %}<div class="entry-source"><span class="source mono">来源：{% if e.source_url %}<a href="{{ e.source_url }}" target="_blank" rel="noopener">{{ e.source }}</a>{% else %}{{ e.source }}{% endif %}</span></div>{% endif %}
+  <div class="entry-body">{{ e.body_html | safe }}</div>
+  {% if e.deepdive_html %}<section class="deepdive">
+    <span class="deepdive-label mono"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M12 3l9 9-9 9-9-9 9-9z"/></svg>深度解读</span>
+    <div class="deepdive-body">{{ e.deepdive_html | safe }}</div>
+    {% if e.references %}<div class="refs mono">参考来源：{% for r in e.references %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% if not loop.last %}、{% endif %}{% endfor %}</div>{% endif %}
+  </section>{% endif %}
+</article>
+{% endmacro %}
+
+{# 首页：今日精选 · 全文直出（分数置于标题左，右侧规格卡已移除） #}
+{% macro featured_full(e, rel, rank) %}
+<article class="featured" id="{{ e.slug }}">
+  <header class="featured-head">
+    <span class="fh-score" aria-label="评分 {{ e.score }}">{{ e.score }}</span>
+    <div class="fh-titlebox">
+      <h2 class="featured-title serif">{{ e.title }}</h2>
+    </div>
+  </header>
+
+  <div class="featured-main">
+    <div class="featured-meta mono">
+      {% if e.source %}<span class="fm-source">来源：{% if e.source_url %}<a href="{{ e.source_url }}" target="_blank" rel="noopener">{{ e.source }}</a>{% else %}{{ e.source }}{% endif %}</span>{% endif %}
+    </div>
+
+    <div class="entry-body">{{ e.body_html | safe }}</div>
+
+    {% if e.deepdive_html %}<section class="deepdive">
+      <span class="deepdive-label mono"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M12 3l9 9-9 9-9-9 9-9z"/></svg>深度解读</span>
+      <div class="deepdive-body">{{ e.deepdive_html | safe }}</div>
+      {% if e.references %}<div class="refs mono">参考来源：{% for r in e.references %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title or r.url }}</a>{% if not loop.last %}、{% endif %}{% endfor %}</div>{% endif %}
+    </section>{% endif %}
+  </div>
+</article>
+{% endmacro %}
+
+{# 首页：今日资讯流入口条（与今日精选构成同一「今日」整体）。
+   预览列表只列**非精选**条目，避免与上方精选全文标题重复。 #}
+{% macro today_strip(today, entries, weekday, total, dive_count, total_time, rel) %}
+<a class="today-strip" href="{{ rel }}days/{{ today }}.html">
+  <div class="ts-head">
+    <b class="ts-kicker mono">MORE</b>
+    <span class="ts-kicker-sub mono">其他资讯</span>
+  </div>
+  <div class="ts-body">
+    <div class="ts-date">
+      <span class="ts-today-label mono">今日</span>
+      <span class="ts-day serif">{{ today[8:] }}</span>
+    </div>
+    <div class="ts-mid">
+      {% if entries %}
+      <ul class="ts-list">
+        {% for e in entries[:3] %}
+        <li>
+          {% if e.score > 0 %}<span class="ts-score mono" title="编辑评分 0-100" aria-label="编辑评分 {{ e.score }}">{{ e.score }}</span>{% else %}<span class="ts-dot"></span>{% endif %}
+          <span class="ts-t">{{ e.title }}</span>
+          {% if e.deepdive_html %}<span class="dive-badge" title="深度解读" aria-label="深度解读"><span class="dive-mark" aria-hidden="true"></span></span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="ts-none mono">精选全文已在上方展示</p>
+      {% endif %}
+    </div>
+    <div class="ts-go">
+      <div class="ts-ct mono"><span>{{ total }} 篇 · <span class="dive-mark" aria-hidden="true"></span> {{ dive_count }} 篇含深度解读</span><span>全文约 {{ total_time }} 分钟</span></div>
+      <span class="ts-arrow">进入今日日报 <span aria-hidden="true">→</span></span>
+    </div>
+  </div>
+</a>
+{% endmacro %}
+
+{# 首页：近期日报卡片（无标题，靠间距分隔；预览列多条标题） #}
+{% macro day_card(d, rel) %}
+<a class="dcard" href="{{ rel }}{{ d.link }}">
+  <div class="dcard-date">
+    <span class="dcard-d serif">{{ d.day }}</span>
+    <span class="dcard-wd mono">{{ d.weekday }}</span>
+  </div>
+  <div class="dcard-body">
+    {% if d.headline %}<div class="dcard-headline serif">{{ d.headline }}</div>{% endif %}
+    <ul class="dcard-list">
+      {% for t in d.titles[:2] %}
+      <li><span class="dl-t">{{ t.title }}</span>{% if t.dive %}<span class="dive-badge" title="深度解读" aria-label="深度解读"><span class="dive-mark" aria-hidden="true"></span></span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    <div class="dcard-foot mono">
+      <span class="df-left">
+        {% if d.count > 2 %}<span class="df-more">+ {{ d.count - 2 }} 篇更多</span>{% endif %}
+        {% if d.topscore > 0 %}<span class="df-score" title="当日最高分" aria-label="当日最高分 {{ d.topscore }}">当日最高 {{ d.topscore }}</span>{% endif %}
+      </span>
+      <span class="dcard-go">阅读全文 →</span>
+    </div>
+  </div>
+</a>
+{% endmacro %}
+
+{# 归档页：一行日报（月份由所在月标题提供，行内不再重复年份/月份） #}
+{% macro archive_row(d, rel) %}
+<a class="arch-row" href="{{ rel }}days/{{ d.date }}.html">
+  <span class="ar-day serif">{{ d.day }}</span>
+  <span class="ar-wd mono">{{ d.weekday }}</span>
+  <span class="ar-head">{{ d.headline }}</span>
+  <span class="ar-count mono">{{ d.count }} 篇</span>
+  <span class="ar-go" aria-hidden="true">→</span>
+</a>
+{% endmacro %}
+
+{# 归档页：右侧年月目录（年 → 月两级，对齐单日页 toc 面板风格）。
+   默认 open（桌面端常驻展开）；app.js 仅在确认窄屏（≤900px）时收起，可点击展开 #}
+{% macro arch_nav(tree, rel) %}
+<details class="panel arch-nav" open aria-label="归档目录">
+  <summary class="panel-title mono">归档目录<span class="sum-hint mono">展开</span></summary>
+  <ul class="arch-nav-list">
+    {% for y in tree %}
+    <li class="an-year">
+      <div class="an-year-row">
+        <span class="an-year-label serif">{{ y.year }}</span>
+        <span class="an-year-stats mono">{{ y.days }} 期 · {{ y.count }} 篇</span>
+      </div>
+      <ul class="an-months">
+        {% for m in y.months %}
+        <li class="an-month" data-month="{{ m.label }}"><a href="#month-{{ m.label }}">{{ m.month }} 月<span class="an-m-stats mono">{{ m.count }} 篇</span></a></li>
+        {% endfor %}
+      </ul>
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endmacro %}
+
+{# 单日页：右侧目录（details/summary 折叠，同上） #}
+{% macro toc_panel(date, entries, rel) %}
+<details class="panel toc" open>
+  <summary class="panel-title mono">本期目录<span class="sum-hint mono">展开</span></summary>
+  <ul class="toc-list">
+    {% for e in entries %}
+    <li class="toc-item"{% if e.score > 0 %} data-score="{{ e.score }}"{% endif %}><a href="{{ rel }}days/{{ date }}.html#{{ e.slug }}">{{ e.title }}</a>{% if e.deepdive_html %}<span class="dive-badge" title="深度解读" aria-label="深度解读"><span class="dive-mark" aria-hidden="true"></span></span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+</details>
+{% endmacro %}

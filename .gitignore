@@ -1,0 +1,21 @@
+# 环境与密钥（绝不提交）
+.env
+config.toml
+
+# 工作区本地数据（工作记忆/备份，不提交公开仓库）
+.workbuddy/
+
+# Git Bash 下误创建的 Windows 保留名垃圾文件（dir > nul 重定向产物）
+nul
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

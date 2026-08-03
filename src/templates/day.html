@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% from "macros.html" import entry_card, toc_panel %}
+
+{% block title %}{{ date }} 日报 · {{ site.title }}{% endblock %}
+
+{% block content %}
+<main class="day-page wrap">
+  <nav class="crumb mono"><a href="{{ rel }}index.html">← 返回首页</a><a href="{{ rel }}archive.html">查看归档</a></nav>
+  <div class="day-hero">
+    {% set dive_count = entries | selectattr('deepdive_html') | list | length %}
+    <h1 class="day-title serif">{{ date[5:7] }} 月 {{ date[8:] }} 日 <span class="day-wd mono">{{ entries | length }} 篇{% if dive_count == entries | length %} · <span class="dive-mark" aria-hidden="true"></span> 均含深度解读{% elif dive_count > 0 %} · <span class="dive-mark" aria-hidden="true"></span> {{ dive_count }} 篇含深度解读{% endif %}</span></h1>
+  </div>
+
+  <div class="day-search">
+    <input id="search" type="search" placeholder="搜索标题 / 摘要…" autocomplete="off" aria-label="搜索今日日报内容">
+    <span class="search-divider" aria-hidden="true"></span>
+    <span class="sort-box mono" role="group" aria-label="排序方式">
+      <span class="sort-label">排序</span>
+      <span class="sort-switch">
+        <button type="button" id="sort-time" class="ss-btn active" aria-pressed="true">时间</button>
+        <button type="button" id="sort-score" class="ss-btn" aria-pressed="false">评分</button>
+      </span>
+    </span>
+  </div>
+
+  <div class="day-grid2">
+    <section class="feed" id="feed">
+      {% for e in entries %}
+        {{ entry_card(e, rel, show_date=false, show_tags=show_tags) }}
+      {% endfor %}
+      <p class="empty mono" id="empty" hidden>没有匹配的内容。</p>
+    </section>
+
+    <aside class="day-side">
+      {{ toc_panel(date, entries, rel) }}
+    </aside>
+
+    <nav class="day-nav">
+      {% if prev_date %}<a class="day-prev" href="{{ rel }}days/{{ prev_date }}.html">← {{ prev_date[5:7] }}.{{ prev_date[8:] }}</a>{% else %}<span class="day-nav-disabled">← 已是最早</span>{% endif %}
+      {% if next_date %}<a class="day-next" href="{{ rel }}days/{{ next_date }}.html">{{ next_date[5:7] }}.{{ next_date[8:] }} →</a>{% else %}<span class="day-nav-disabled">已是最新</span>{% endif %}
+    </nav>
+  </div>
+</main>
+{% endblock %}

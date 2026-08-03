@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% from "macros.html" import archive_row, arch_nav %}
+
+{% block title %}归档 · {{ site.title }}{% endblock %}
+
+{% block content %}
+<main class="archive-page wrap">
+  <nav class="crumb mono"><a href="{{ rel }}index.html">← 返回首页</a><span>归档</span></nav>
+
+  <header class="page-head">
+    <h1 class="page-title serif">归档 · ARCHIVE</h1>
+    <p class="page-sub mono">{{ archive_stats.count }} 篇 · {{ archive_stats.days }} 期 · {{ archive_stats.months }} 个月 · 按日期倒序</p>
+  </header>
+
+  <div class="day-search archive-search">
+    <input id="search" type="search" placeholder="搜索标题 / 日期…" autocomplete="off" aria-label="搜索归档内容">
+    <span class="result-count mono"><span id="rc">0</span> / {{ archive_stats.days }} 期</span>
+  </div>
+
+  <div class="archive-grid2">
+    <section class="archive-list" id="feed">
+      {% for y in archive_tree %}
+        {% for m in y.months %}
+        <section class="arch-month" id="month-{{ m.label }}" data-month="{{ m.label }}">
+          <header class="arch-month-head">
+            <span class="amh-year mono">{{ y.year }}</span>
+            <h2 class="amh-month serif">{{ m.month }}<span class="amh-unit">月</span></h2>
+            <span class="amh-stats mono">{{ m.count }} 篇</span>
+          </header>
+          <ul class="arch-rows">
+            {% for d in m.days %}
+            <li>{{ archive_row(d, rel) }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endfor %}
+      {% endfor %}
+      <p class="empty mono" id="empty" hidden>没有匹配的内容。</p>
+    </section>
+
+    <aside class="archive-side">
+      {{ arch_nav(archive_tree, rel) }}
+    </aside>
+  </div>
+</main>
+{% endblock %}

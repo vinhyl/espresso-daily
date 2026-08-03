@@ -1,0 +1,19 @@
+[project]
+name = "espresso-daily"
+version = "0.1.0"
+description = "意式浓缩每日资讯流：采集 RSS/社区 -> LLM 整理打标签 -> 静态站生成 (Cloudflare Pages)"
+requires-python = ">=3.11"
+dependencies = [
+    "jinja2",
+    "markdown",
+    "feedparser",
+    "httpx",
+    "python-dotenv",
+]
+
+[project.scripts]
+espresso-build = "src.build:main"
+espresso-pipeline = "src.pipeline:main"
+
+[tool.setuptools]
+packages = ["src"]

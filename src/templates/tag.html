@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% from "macros.html" import entry_card, archive_panel %}
+
+{% block title %}#{{ tag_name }} · {{ site.title }}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <nav class="crumb mono"><a href="{{ rel }}index.html">← 返回信息流</a></nav>
+  <h1 class="day-head"><span class="tag-badge mono">#{{ tag_name }}</span> 标签</h1>
+  <p class="cat-desc mono">该标签由 LLM/规则在整理时动态标注，下方为该标签下的全部内容（共 {{ tag_count }} 篇）。</p>
+  <div class="layout">
+    <section class="feed">
+      {% for e in entries %}
+        {{ entry_card(e, rel, show_tags=show_tags) }}
+      {% endfor %}
+    </section>
+    <aside class="sidebar">
+      {{ archive_panel(months, all_tags, rel, show_tags) }}
+    </aside>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site.title }} — {{ site.subtitle }}{% endblock %}</title>
+  <meta name="description" content="{{ site.description }}">
+  <meta property="og:title" content="{{ site.title }} — {{ site.subtitle }}">
+  <meta property="og:description" content="{{ site.description }}">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ rel }}assets/style.css?v={{ asset_ver('style.css') }}">
+</head>
+<body>
+  <div class="topbar"></div>
+
+  <header class="masthead">
+    <div class="masthead-inner wrap">
+      <div class="brand">
+        <a class="wordmark" href="{{ rel }}index.html">ESPRESSO <em>DAILY</em></a>
+        <p class="tagline mono">AI 智能严选 · 0-100 浓度评分</p>
+      </div>
+      <div class="mast-right">
+        <div class="hero-stats">
+          <div class="stat">
+            <span class="stat-num serif">{{ total }}</span>
+            <span class="stat-label mono">总篇数</span>
+          </div>
+          <div class="stat">
+            <span class="stat-num serif">{{ days_covered }}</span>
+            <span class="stat-label mono">总期数</span>
+          </div>
+        </div>
+        <div class="mast-actions">
+          {# RSS / 语言按钮暂隐藏（样式已在 style.css 备好，功能就绪后取消注释）：
+             1. RSS 订阅：<a class="btn-icon" href="{{ site.base_url }}/feed.xml" aria-label="RSS 订阅" title="RSS 订阅"><svg viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.6"/></svg></a>
+                —— 需先有 feed.xml 生成能力，避免 404 死链。
+             2. 语言切换：<a class="lang-switch" href="{{ site.base_url }}/en/" title="English version"><b>中</b><span>/</span>EN</a>
+                —— 英文版上线后启用，当前仅中文。
+          #}
+          <a class="btn-outline" href="{{ rel }}archive.html">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="1"/><path d="M3 9h18M8 2v4M16 2v4M12 13v5M9.5 15.5L12 13l2.5 2.5"/></svg>
+            <span>查看归档</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  {% block content %}{% endblock %}
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <span class="serif">{{ site.title }} · {{ site.subtitle }}</span>
+      <span class="mono">每日管线：RSS + 社区 → LLM 整理 → 静态生成 · Cloudflare Pages</span>
+    </div>
+  </footer>
+
+  <script src="{{ rel }}assets/app.js?v={{ asset_ver('app.js') }}"></script>
+</body>
+</html>

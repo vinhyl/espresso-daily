@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+{% from "macros.html" import featured_full, today_strip, day_card %}
+
+{% block title %}{{ site.title }} — {{ site.subtitle }}{% endblock %}
+
+{% block content %}
+<main class="home wrap">
+  <!-- HERO：非对称编辑网格，大号排版张力 -->
+  <section class="hero">
+    <div class="hero-main">
+      <div class="hero-issue">
+        <span class="hero-issue-dot"></span>
+        <span class="hero-issue-day serif">{{ latest_date[5:7] }}.{{ latest_date[8:] }}</span>
+        <span class="hero-issue-meta">{{ latest_date[:4] }} · {{ latest_weekday }}</span>
+      </div>
+      <h1 class="hero-title">今日精选</h1>
+      <p class="hero-sub">每日精选优质信源，0-100 评分标注信息浓度——分数越高，越值得先读；深度解读萃取每日精华。</p>
+    </div>
+    <aside class="hero-spec">
+      <span class="issue-badge mono">ISSUE {{ "%03d" | format(issue_num) }}</span>
+      <div class="spec-stats">
+        <div class="spec-stat"><span class="ss-num serif">{{ today_entries | length }}</span><span class="ss-label mono">今日篇数</span></div>
+        <div class="spec-stat"><span class="ss-num serif">{{ today_entries | selectattr('deepdive_html') | list | length }}</span><span class="ss-label mono"><span class="dive-mark" aria-hidden="true"></span> 含深度解读</span></div>
+        <div class="spec-stat"><span class="ss-num serif">{{ today_total_time }}<small>分钟</small></span><span class="ss-label mono">全文阅读</span></div>
+      </div>
+      <a class="btn-ghost mono" href="{{ rel }}days/{{ today }}.html">最新日报 <span aria-hidden="true">→</span></a>
+    </aside>
+  </section>
+
+  <!-- 今日精选全文 -->
+  <section class="today-block" id="today">
+    <div class="sec-head">
+      <span class="sec-kicker mono"><b>FULL TEXT</b> · 全文直出</span>
+      <span class="sec-rule"></span>
+    </div>
+
+    {% for e in featured %}
+      {{ featured_full(e, rel, loop.index) }}
+    {% endfor %}
+
+    {{ today_strip(today, today_rest, today_weekday, today_entries | length, today_entries | selectattr('deepdive_html') | list | length, today_total_time, rel) }}
+  </section>
+
+  <!-- 近期日报 -->
+  <section class="recent-block">
+    <div class="sec-head">
+      <span class="sec-kicker mono"><b>RECENT</b> · 近期日报</span>
+      <span class="sec-rule"></span>
+    </div>
+    <div class="recent-grid">
+      {% for d in recent_days %}
+        {{ day_card(d, rel) }}
+      {% endfor %}
+    </div>
+  </section>
+</main>
+{% endblock %}

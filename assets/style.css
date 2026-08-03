@@ -1,0 +1,450 @@
+/* ==========================================================================
+   ESPRESSO DAILY — 现代精致亮调工业风 · 庄园绿
+   微水泥暖白底 + 灰泥浅灰卡 + 哑光铸铁黑字 + 庄园绿点缀
+   全站噪点纹理 + 磨砂玻璃悬浮导航 + 1px 铸铁黑硬朗线框（弃重阴影）
+   ========================================================================== */
+
+:root {
+  /* —— 基础色彩（规范） —— */
+  --bg-main: #F4F3EF;          /* 70% 主背景：微水泥暖白 */
+  --bg-surface: #E6E4DF;       /* 20% 模块/卡片：灰泥浅灰 */
+  --text-primary: #2B2A28;     /* 主文字 / 1px 结构线框：哑光铸铁黑 */
+  /* 规范石墨中灰 #8C8881 仅用于分割线 / 大号次要文字 / 非激活态；
+     小号阅读文字用下方 AA 安全变体，确保对比度达标 */
+  --text-secondary: #8C8881;   /* 石墨中灰（规范原值） */
+  --text-muted: #67615A;       /* 小号元信息 / 面包屑：AA 安全变体（主底5.51/卡底4.81） */
+  --accent: #8A9A86;           /* 庄园绿：CTA / 选中态 / Hover */
+  --accent-hover: #73836F;     /* 悬停加深 */
+  --accent-bright: #AACC00;    /* 高亮微酸绿：评分 gauge / 强调块 */
+  --accent-soft: rgba(138,154,134,0.14);
+  --accent-line: rgba(138,154,134,0.5);
+
+  /* —— 线框 —— */
+  --line: rgba(43,42,40,0.12);     /* 发丝分隔线 */
+  --iron: rgba(43,42,40,0.55);     /* 1px 铸铁黑硬朗卡边框 */
+  --iron-soft: rgba(43,42,40,0.22);
+
+  /* —— 字体 —— */
+  --display: 'Space Grotesk', 'Noto Sans SC', sans-serif;
+  --sans: 'IBM Plex Sans', 'Noto Sans SC', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius: 2px;
+  --maxw: 1180px;
+  --gap: 22px;
+
+  /* —— 噪点纹理（去饱和、~4.5% 透明度） —— */
+  --noise: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.8'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23n)'%20opacity='0.045'/%3E%3C/svg%3E");
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.72;
+  color: var(--text-primary);
+  background-color: var(--bg-main);
+  background-image: var(--noise);
+  background-size: 180px 180px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.serif { font-family: var(--display); font-weight: 700; letter-spacing: -.01em; }
+.mono  { font-family: var(--mono); }
+.ico   { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ico-sm{ width: 13px; height: 13px; }
+
+a { color: var(--text-primary); text-decoration: none; border-bottom: 1px solid var(--iron-soft); transition: border-color .2s, background .2s, color .2s; }
+a:hover { border-bottom-color: var(--accent); background: var(--accent-soft); }
+
+h1,h2,h3 { font-family: var(--display); font-weight: 700; margin: 0; line-height: 1.12; letter-spacing: -.015em; }
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 28px; }
+
+[id] { scroll-margin-top: 100px; }
+
+/* ==========================================================================
+   顶部信号条 + 磨砂玻璃悬浮导航
+   ========================================================================== */
+.topbar { height: 3px; background: var(--accent); }
+
+.masthead {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(244,243,239,0.72);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
+  border-bottom: 1px solid var(--line);
+}
+.masthead-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-top: 16px; padding-bottom: 16px; }
+.brand { display: flex; flex-direction: column; gap: 4px; }
+.wordmark { font-family: var(--display); font-weight: 700; font-size: 1.32rem; letter-spacing: .04em; color: var(--text-primary); border: none; }
+.wordmark em { font-style: normal; color: var(--accent-hover); }
+.wordmark:hover { background: none; }
+.tagline { margin: 0; font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+
+.mast-right { display: flex; align-items: center; gap: 26px; }
+.mast-actions { display: flex; align-items: center; gap: 10px; }
+.issue-date { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.issue-caption { font-size: .6rem; letter-spacing: .2em; text-transform: uppercase; color: var(--text-muted); }
+.issue-num { font-family: var(--display); font-size: 1.5rem; color: var(--text-primary); }
+.hero-stats { display: flex; gap: 22px; }
+.stat { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.stat-num { font-family: var(--display); font-size: 1.5rem; color: var(--text-primary); }
+.stat-label { font-size: .58rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); margin-top: 4px; }
+
+/* CTA 按键：庄园绿填充 + 铸铁黑字（AA 通过 4.7:1） */
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 11px 18px;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 500;
+  color: var(--text-primary); background: var(--accent);
+  border: 1px solid var(--text-primary); border-radius: var(--radius);
+  cursor: pointer; transition: background .2s, transform .15s;
+}
+.btn-ghost svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.btn-ghost:hover { background: var(--accent-hover); }
+.btn-ghost:active { transform: translateY(1px); }
+.btn-ghost:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
+
+/* 次级描边按钮（顶部导航用）：透明底 + 铁灰线框，与 hero 填充按钮区分层级 */
+.btn-outline {
+  display: inline-flex; align-items: center; gap: 9px;
+  height: 36px; padding: 0 18px;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 500;
+  color: var(--text-primary); background: transparent;
+  border: 1px solid var(--iron); border-radius: var(--radius);
+  cursor: pointer; transition: background .2s, border-color .2s, color .2s;
+}
+.btn-outline svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.btn-outline:hover { background: var(--accent-soft); border-color: var(--accent); }
+.btn-outline:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
+
+/* 顶部按钮组扩展位（预留）：
+   1. .btn-icon —— RSS 订阅图标按钮（feed.xml 生成能力就绪后启用）
+   2. .lang-switch —— 中/EN 语言切换（英文版上线后启用） */
+.btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; color: var(--text-primary); border: 1px solid var(--iron); border-radius: var(--radius); transition: background .2s, border-color .2s, color .2s; }
+.btn-icon svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.btn-icon:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--text-primary); }
+.lang-switch { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; color: var(--text-muted); border: 1px solid var(--iron-soft); border-radius: var(--radius); transition: border-color .2s, color .2s; }
+.lang-switch b { color: var(--text-primary); font-weight: 500; }
+.lang-switch:hover { border-color: var(--accent); color: var(--text-primary); }
+
+/* ==========================================================================
+   首页：HERO（非对称编辑网格）
+   ========================================================================== */
+.home { padding-bottom: 80px; }
+
+.hero { display: grid; grid-template-columns: minmax(0,1fr) 280px; gap: 48px; align-items: end; padding: 56px 0 40px; }
+.hero-issue { display: flex; align-items: center; gap: 13px; margin: 0 0 22px; }
+.hero-issue-dot { width: 7px; height: 7px; background: var(--accent); flex: none; }
+.hero-issue-day { font-family: var(--display); font-weight: 700; font-size: 2.2rem; line-height: 1; color: var(--text-primary); letter-spacing: -.02em; }
+.hero-issue-meta { font-family: var(--mono); font-size: .66rem; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
+.hero-title { font-size: clamp(2.6rem, 6vw, 4rem); line-height: .96; }
+.hero-sub { margin: 22px 0 0; max-width: 52ch; font-size: 1.02rem; color: var(--text-secondary); line-height: 1.7; }
+
+.hero-spec { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; padding: 22px; background-color: var(--bg-surface); background-image: var(--noise); background-size: 180px 180px; border: 1px solid var(--iron); border-radius: var(--radius); }
+.hero-spec > .btn-ghost { align-self: flex-end; }
+.issue-badge { display: inline-flex; align-items: center; gap: 7px; font-size: .62rem; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+.issue-badge::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
+.spec-stats { display: flex; justify-content: space-between; gap: 20px; width: 100%; }
+.spec-stat { display: flex; flex-direction: column; line-height: 1; }
+.ss-num { font-family: var(--display); font-size: 2.1rem; color: var(--text-primary); }
+.ss-num small { font-size: .42em; color: var(--text-muted); margin-left: 3px; font-family: var(--mono); letter-spacing: .02em; }
+.ss-label { font-size: .6rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); margin-top: 5px; }
+
+/* ==========================================================================
+   分区标题（铸铁黑细线 + 绿方块点缀）
+   ========================================================================== */
+.sec-head { display: flex; align-items: center; gap: 16px; margin: 48px 0 24px; }
+.sec-kicker { font-family: var(--mono); font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 10px; font-weight: 500; }
+.sec-kicker::before { content: ""; width: 8px; height: 8px; background: var(--accent); display: inline-block; }
+.sec-kicker b { color: var(--text-primary); font-weight: 600; }
+.sec-rule { flex: 1; height: 1px; background: var(--line); }
+
+/* ==========================================================================
+   今日精选（非对称：左主文 + 右规格面板）
+   ========================================================================== */
+.featured { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; padding: 32px 0; border-top: 1px solid var(--iron); }
+.featured-head { display: flex; align-items: baseline; gap: 18px; margin-bottom: 18px; }
+.fh-score { flex: none; font-family: var(--display); font-weight: 700; font-size: 2rem; line-height: 1; color: var(--accent-hover); border-left: 3px solid var(--accent-bright); padding-left: 12px; }
+
+/* 评分家族：与 fh-score 共享「数字 + 酸绿标记」语言，按场景降级为 badge / mini。
+   行内场景（ts/toc）不再使用形状标记，避免与深度解读菱形并排冲突 */
+.score-badge { flex: none; font-family: var(--mono); font-weight: 500; font-size: .8rem; line-height: 1; color: var(--accent-hover); border-left: 2px solid var(--accent-bright); padding-left: 8px; }
+.fh-titlebox { flex: 1; }
+.featured-title { font-size: clamp(1.5rem, 2.6vw, 2rem); }
+
+.featured-main { min-width: 0; }
+.featured-meta { margin-bottom: 14px; }
+.fm-source { font-size: .72rem; letter-spacing: .04em; color: var(--text-muted); }
+.entry-body { font-size: 1rem; line-height: 1.78; color: var(--text-primary); }
+.entry-body p { margin: 0 0 1.1em; }
+.entry-body h3 { font-size: 1.12rem; margin: 1.5em 0 .5em; }
+.entry-body ul, .entry-body ol { margin: 0 0 1.1em; padding-left: 1.3em; }
+.entry-body li { margin: .35em 0; }
+.entry-body a { border-bottom: 1px solid var(--accent-line); }
+.entry-body strong { color: var(--text-primary); }
+
+.deepdive { margin-top: 22px; padding: 18px 20px; border-left: 2px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--radius) var(--radius) 0; }
+.deepdive-label { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: .85rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-primary); font-weight: 600; margin-bottom: 12px; }
+.deepdive-label svg { fill: var(--accent-bright); stroke: none; }
+.deepdive-body { font-size: .96rem; line-height: 1.74; }
+
+/* 深度解读末尾的「参考来源」：与来源（底栏）视觉区分，虚线分隔 + 庄园绿链接 */
+.refs { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--accent-line); font-size: .8rem; letter-spacing: .02em; color: var(--text-muted); }
+.refs a { color: var(--accent-hover); border-bottom: 1px solid var(--accent-line); }
+.refs a:hover { background: var(--accent-soft); border-bottom-color: var(--accent); }
+
+/* 深度解读符号（全站统一：实心酸绿菱形）
+   - 用 clip-path 裁切而非 rotate：盒模型即真实菱形尺寸，无旋转溢出
+   - 文本内联处 vertical-align 用 em（相对父字号上移，随字号缩放）；flex 容器内不受影响 */
+.dive-mark { display: inline-block; width: 8px; height: 8px; background: var(--accent-bright); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); vertical-align: 0.08em; }
+.dive-badge { display: inline-flex; align-items: center; flex: none; line-height: 1; }
+.dive-badge .dive-mark { flex: none; vertical-align: 0; }
+/* 单日页大标题（约 2-3rem）中文视觉中心更高，加大上移量 */
+.day-wd .dive-mark { vertical-align: 0.08em; }
+
+/* ==========================================================================
+   今日资讯流入口条
+   ========================================================================== */
+/* 精选与其他资讯同属「今日日报」，内部间距收紧；与近期日报的区分由 recent-block 的 sec-head 承担 */
+.today-block > .featured:last-of-type { padding-bottom: 18px; }
+.today-strip { display: block; margin-top: 14px; padding: 20px 22px; background-color: var(--bg-surface); background-image: var(--noise); background-size: 180px 180px; border: 1px solid var(--iron); border-radius: var(--radius); transition: background .2s, border-color .2s, transform .15s; }
+.today-strip:hover { background: var(--accent-soft); border-color: var(--accent); transform: translateY(-2px); }
+.today-strip:active { transform: translateY(0); }
+.ts-head { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.ts-kicker { font-family: var(--mono); font-size: .64rem; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-hover); }
+.ts-kicker-sub { font-family: var(--mono); font-size: .64rem; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
+.ts-body { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 26px; align-items: center; }
+.ts-date { display: flex; flex-direction: column; line-height: 1; border-right: 1px solid var(--line); padding-right: 22px; }
+.ts-day { font-family: var(--display); font-size: 2.4rem; line-height: 1; color: var(--text-primary); }
+.ts-today-label { font-size: .58rem; letter-spacing: .2em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+.ts-mid { min-width: 0; }
+.ts-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.ts-list li { display: flex; align-items: baseline; gap: 10px; font-size: .92rem; }
+.ts-dot { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; flex: none; transform: translateY(1px); }
+/* 今日其他资讯行首评分（无分条目回退圆点）：行首信号 + 行尾菱形，分居两端不并排 */
+.ts-score { flex: none; font-family: var(--mono); font-weight: 500; font-size: .82rem; line-height: 1; color: var(--accent-hover); }
+.ts-t { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ts-src { font-size: .68rem; color: var(--text-muted); white-space: nowrap; flex: none; }
+.ts-none { margin: 0; font-size: .9rem; color: var(--text-muted); }
+.ts-go { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ts-ct { font-size: .68rem; color: var(--text-muted); display: flex; flex-direction: column; align-items: flex-end; gap: 3px; line-height: 1.5; }
+.ts-arrow { font-size: .82rem; font-weight: 500; color: var(--text-primary); }
+
+/* ==========================================================================
+   往期日报（非对称错落网格）
+   ========================================================================== */
+.recent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--gap); }
+.dcard { display: flex; flex-direction: column; gap: 14px; padding: 22px; background-color: var(--bg-surface); background-image: var(--noise); background-size: 180px 180px; border: 1px solid var(--iron); border-radius: var(--radius); min-width: 0; transition: background .2s, border-color .2s, transform .15s; }
+.dcard:hover { background: var(--accent-soft); border-color: var(--accent); transform: translateY(-2px); }
+.dcard:active { transform: translateY(0); }
+.dcard-date { display: flex; flex-direction: column; line-height: 1; }
+.dcard-d { font-family: var(--display); font-size: 1.9rem; color: var(--text-primary); }
+.dcard-wd { font-size: .58rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); margin-top: 4px; }
+.dcard-body { flex: 1; }
+/* 每日总标题（LLM 生成，content/{date}-00.md）：卡片主角，与淡预览列表区分 */
+.dcard-headline { font-family: var(--display); font-size: 1.15rem; line-height: 1.45; color: var(--text-primary); margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--accent-line); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dcard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.dcard-list li { display: flex; align-items: baseline; gap: 10px; font-size: .84rem; color: var(--text-secondary); }
+.dl-t { color: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dcard-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.df-left { display: inline-flex; align-items: baseline; gap: 12px; min-width: 0; flex-wrap: wrap; }
+.df-more { font-size: .66rem; letter-spacing: .08em; color: var(--text-muted); }
+/* 当日最高分（底部入口行）：带文字说明，避免裸数字意义不明；左条符号与 fh-score/score-badge 统一（含 line-height:1 控制竖条高度=字高） */
+.df-score { font-size: .66rem; letter-spacing: .08em; line-height: 1; color: var(--accent-hover); white-space: nowrap; border-left: 2px solid var(--accent-bright); padding-left: 6px; }
+.dcard-go { font-size: .78rem; font-weight: 500; color: var(--text-primary); }
+
+/* ==========================================================================
+   单日页
+   ========================================================================== */
+.day-page { padding-top: 40px; padding-bottom: 80px; }
+.crumb { display: flex; gap: 16px; font-size: .74rem; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 26px; }
+.crumb a { border: none; color: var(--text-muted); }
+.crumb a:hover { color: var(--text-primary); background: none; }
+.day-hero { margin-bottom: 26px; }
+.day-title { font-size: clamp(2rem, 4.5vw, 3rem); }
+.day-wd { font-family: var(--mono); font-size: .8rem; font-weight: 400; color: var(--text-muted); letter-spacing: .04em; }
+
+.day-search { display: flex; align-items: center; gap: 14px; margin-bottom: 30px; padding: 12px 16px; background-color: var(--bg-surface); background-image: var(--noise); background-size: 180px 180px; border: 1px solid var(--iron); border-radius: var(--radius); }
+/* 搜索 / 排序隔断：1px 铁灰竖线撑满容器内容高，把搜索框切成两个功能分区（搜索 | 排序） */
+.search-divider { flex: none; width: 1px; align-self: stretch; background: var(--iron-soft); }
+/* 排序独立成组（框内分区），文字标签 + 胶囊 + 竖线隔断三重区分，避免被误认为搜索高级选项 */
+.sort-box { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.sort-label { font-size: .68rem; letter-spacing: .16em; color: var(--text-muted); white-space: nowrap; }
+/* 归档页搜索框不在 day-toolbar 内，自带 margin: 26px 0 34px（见归档专属规则） */
+.day-search input { flex: 1; border: none; background: transparent; font-family: var(--sans); font-size: 1rem; color: var(--text-primary); outline: none; }
+.day-search input::placeholder { color: var(--text-muted); }
+.result-count { font-family: var(--mono); font-size: .76rem; color: var(--text-muted); white-space: nowrap; }
+
+/* 单日页排序分段控件（时间 / 评分）：胶囊描边，选中态 accent-soft + 庄园绿 */
+.sort-switch { display: inline-flex; align-items: center; flex: none; border: 1px solid var(--iron); border-radius: 999px; overflow: hidden; }
+.ss-btn { border: none; background: transparent; font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; line-height: 1; padding: 7px 12px; color: var(--text-muted); cursor: pointer; transition: background .2s, color .2s; }
+.ss-btn + .ss-btn { border-left: 1px solid var(--iron); }
+.ss-btn:hover { color: var(--text-primary); }
+.ss-btn.active { background: var(--accent-soft); color: var(--accent-hover); }
+.ss-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 560px) { .sort-label { display: none; } }
+
+.day-grid2 { display: grid; grid-template-columns: minmax(0,1fr) 260px; grid-template-areas: "feed side" "nav side"; gap: 40px; align-items: start; }
+.feed { grid-area: feed; display: flex; flex-direction: column; gap: 0; }
+.entry { padding: 26px 0; border-top: 1px solid var(--iron); scroll-margin-top: 100px; }
+.entry:first-child { border-top: none; padding-top: 0; }
+.entry-meta { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+.entry-title { font-size: 1.4rem; }
+.entry-title-row { display: flex; align-items: baseline; gap: 14px; }
+.entry-title-row .entry-title { flex: 1; min-width: 0; }
+.entry-source { margin: 10px 0 0; }
+.source { font-size: .74rem; letter-spacing: .03em; color: var(--text-muted); }
+/* 来源与正文之间留出呼吸间距（仅限 entry 卡片，不影响首页精选的 .entry-body） */
+.entry .entry-body { margin-top: 12px; }
+.empty { color: var(--text-muted); font-size: .9rem; padding: 20px 0; }
+
+.day-side { grid-area: side; position: sticky; top: 100px; display: flex; flex-direction: column; gap: 18px; }
+.day-nav { grid-area: nav; display: flex; justify-content: space-between; gap: 10px; }
+.panel { padding: 20px; background-color: var(--bg-surface); background-image: var(--noise); background-size: 180px 180px; border: 1px solid var(--iron); border-radius: var(--radius); }
+.panel-title { font-family: var(--mono); font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 14px; }
+
+/* 目录面板折叠（窄屏收起为一行标题；桌面端由 app.js 强制展开） */
+.arch-nav summary, .toc summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; margin-bottom: 0; transition: background .2s; }
+.arch-nav summary::-webkit-details-marker, .toc summary::-webkit-details-marker { display: none; }
+.arch-nav summary:hover, .toc summary:hover { background: var(--accent-soft); }
+/* 折叠提示：小字「展开」+ 大号 chevron 控件，成组右对齐；展开态自动隐藏 */
+.sum-hint { font-size: .68rem; line-height: 1; letter-spacing: .12em; color: var(--text-secondary); margin-left: auto; }
+.arch-nav[open] .sum-hint, .toc[open] .sum-hint { display: none; }
+.arch-nav summary::after, .toc summary::after {
+  content: "";
+  margin-left: 8px;
+  flex-shrink: 0;
+  position: relative;
+  top: -3px;
+  width: 7px; height: 7px;
+  border-right: 1.8px solid var(--text-secondary);
+  border-bottom: 1.8px solid var(--text-secondary);
+  transform: rotate(45deg);
+  transition: transform .2s, border-color .2s;
+}
+.arch-nav summary:hover::after, .toc summary:hover::after { border-color: var(--accent-hover); }
+.arch-nav[open] summary, .toc[open] summary { margin-bottom: 14px; }
+/* 展开态：hint 隐藏后由箭头自己贴右；向上 V 重心偏上，微回落保持视觉居中 */
+.arch-nav[open] summary::after, .toc[open] summary::after { margin-left: auto; top: 0; transform: rotate(-135deg); }
+.toc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.toc-item { display: flex; align-items: baseline; gap: 8px; }
+.toc-list a { border: none; font-size: .9rem; color: var(--text-primary); padding-left: 12px; border-left: 2px solid var(--iron-soft); transition: border-color .2s, color .2s; flex: 1; min-width: 0; }
+.toc-list a:hover { border-left-color: var(--accent); color: var(--text-primary); background: none; }
+
+.day-nav a, .day-nav-disabled { display: inline-flex; align-items: center; padding: 10px 14px; font-family: var(--mono); font-size: .72rem; letter-spacing: .04em; color: var(--text-primary); background: transparent; border: 1px solid var(--iron); border-radius: var(--radius); flex: 1; transition: background .2s, border-color .2s; }
+.day-nav a:hover { background: var(--accent-soft); border-color: var(--accent); }
+.day-nav .day-next { justify-content: flex-end; }
+.day-nav-disabled { color: var(--text-muted); border-color: var(--iron-soft); justify-content: center; cursor: default; }
+
+/* ==========================================================================
+   归档页（双栏索引 · 右侧年月目录）
+   ========================================================================== */
+.archive-page { padding-top: 40px; padding-bottom: 80px; }
+
+.page-head { margin-bottom: 8px; }
+.page-title { font-size: clamp(2rem, 4.5vw, 3rem); margin-bottom: 8px; }
+.page-sub { margin: 0; font-size: .78rem; color: var(--text-muted); }
+
+.archive-search { margin: 26px 0 34px; }
+
+/* 双栏：主列表 + sticky 年月目录（对齐 day-grid2 / day-side 模式） */
+.archive-grid2 { display: grid; grid-template-columns: minmax(0,1fr) 260px; grid-template-areas: "list side"; gap: 40px; align-items: start; }
+.archive-side { grid-area: side; position: sticky; top: 100px; display: flex; flex-direction: column; }
+
+.archive-list { grid-area: list; display: flex; flex-direction: column; gap: 44px; }
+
+.arch-month { display: flex; flex-direction: column; scroll-margin-top: 110px; }
+
+/* 月份标题：年份弱化 + 月份强调 + 篇数统计（年份全页仅此一处 + 右侧目录） */
+.arch-month-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--iron); }
+.amh-year { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--text-muted); }
+.amh-month { font-family: var(--display); font-size: 2rem; color: var(--text-primary); }
+.amh-unit { font-size: 1rem; margin-left: 3px; color: var(--text-muted); font-weight: 400; }
+.amh-stats { margin-left: auto; font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; color: var(--text-muted); }
+
+.arch-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.arch-rows li { list-style: none; }
+.arch-row { display: grid; grid-template-columns: 38px 42px minmax(0,1fr) 56px 22px; align-items: center; gap: 10px; padding: 14px 14px; background-color: var(--bg-surface); background-image: var(--noise); background-size: 180px 180px; border: 1px solid var(--iron); border-bottom: none; transition: background .2s; }
+.arch-rows li:last-child .arch-row { border-bottom: 1px solid var(--iron); }
+.arch-row:hover { background: var(--accent-soft); }
+.ar-day { font-family: var(--display); font-size: 1.25rem; color: var(--text-primary); }
+.ar-wd { font-family: var(--mono); font-size: .68rem; color: var(--text-muted); }
+.ar-head { color: var(--text-primary); font-size: .96rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-count { font-family: var(--mono); font-size: .76rem; color: var(--text-muted); }
+.ar-go { color: var(--text-muted); text-align: right; }
+
+/* 右侧年月目录面板（复用 .panel 卡片样式 + toc 左竖线风格） */
+.arch-nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+.an-year-row { display: flex; align-items: baseline; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--iron-soft); }
+.an-year-label { font-family: var(--display); font-size: 1.45rem; color: var(--text-primary); }
+.an-year-stats { margin-left: auto; font-family: var(--mono); font-size: .64rem; letter-spacing: .04em; color: var(--text-muted); white-space: nowrap; }
+.an-months { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.an-month a { display: flex; align-items: baseline; gap: 8px; font-size: .9rem; color: var(--text-primary); padding: 3px 0 3px 12px; border: none; border-left: 2px solid var(--iron-soft); transition: border-color .2s, color .2s, background .2s; }
+.an-month a:hover { border-left-color: var(--accent); background: var(--accent-soft); }
+.an-month.active a { border-left-color: var(--accent); color: var(--text-primary); background: var(--accent-soft); }
+.an-m-stats { margin-left: auto; font-family: var(--mono); font-size: .64rem; color: var(--text-muted); white-space: nowrap; }
+
+/* ==========================================================================
+   页脚
+   ========================================================================== */
+.site-footer { margin-top: 64px; border-top: 1px solid var(--iron); padding: 26px 0; }
+.footer-inner { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; font-size: .74rem; color: var(--text-muted); }
+.footer-inner .serif { color: var(--text-primary); font-size: .92rem; }
+
+/* ==========================================================================
+   交互状态 / 可访问性
+   ========================================================================== */
+:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+::selection { background: var(--accent); color: var(--text-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+
+/* ==========================================================================
+   响应式
+   ========================================================================== */
+@media (max-width: 900px) {
+  .day-grid2 { grid-template-columns: 1fr; grid-template-areas: "side" "feed" "nav"; gap: 26px; }
+  .day-side { position: static; }
+  .archive-grid2 { grid-template-columns: 1fr; grid-template-areas: "side" "list"; gap: 26px; }
+  .archive-side { position: static; margin-bottom: 4px; }
+  /* 窄屏折叠态：目录条紧凑化，提示控件更突出 */
+  .arch-nav:not([open]), .toc:not([open]) { padding: 12px 16px; }
+  .arch-row { grid-template-columns: 42px minmax(0,1fr) 52px 18px; gap: 10px; padding: 13px 12px; }
+  .arch-row .ar-wd { display: none; }
+  .mast-right { gap: 20px; }
+  .hero-stats { gap: 18px; }
+}
+
+@media (max-width: 740px) {
+  .tagline { display: none; }
+  .mast-right { gap: 16px; }
+  .hero-stats { gap: 14px; }
+}
+
+@media (max-width: 620px) {
+  .wrap { padding-left: 18px; padding-right: 18px; }
+  .masthead-inner { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .mast-right { width: 100%; justify-content: space-between; gap: 14px; }
+  .recent-grid { grid-template-columns: 1fr; }
+  .hero { grid-template-columns: 1fr; gap: 28px; align-items: start; }
+  .hero-spec { max-width: 380px; justify-self: start; }
+  .ts-body { grid-template-columns: 1fr; gap: 14px; }
+  .ts-date { border-right: none; border-bottom: 1px solid var(--line); padding: 0 0 12px; }
+  /* 窄屏：统计与入口一行排列（对齐近期日报卡片底部 dcard-foot 的 space-between 模式）；
+     省略「全文约 X 分钟」（hero 卡已有该统计，不丢信息）+ nowrap 防换行 */
+  .ts-go { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+  .ts-ct { flex-direction: row; align-items: center; gap: 10px; white-space: nowrap; }
+  .ts-ct span:last-child { display: none; }
+  .ts-arrow { white-space: nowrap; }
+  .hero-stats { gap: 16px; }
+}
