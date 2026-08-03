@@ -4,8 +4,9 @@ name: Daily Espresso Digest
 
 on:
   schedule:
-    # 每天 00:00 (UTC+8 = 前一天 16:00 UTC) 运行；如需其它时区改这里
-    - cron: "0 16 * * *"
+    # 每天 00:08 (UTC+8 = 前一天 16:08 UTC) 运行；刻意避开整点(:00)——
+    # GitHub 定时任务在整点负载最高、最易延迟/丢弃。如需其它时区改这里
+    - cron: "8 16 * * *"
   workflow_dispatch: {}
 
 permissions:
