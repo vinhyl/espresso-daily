@@ -4,8 +4,8 @@ name: Daily Espresso Digest
 
 on:
   schedule:
-    # 每天 08:00 (UTC+8 = 00:00 UTC) 运行；如需其它时区改这里
-    - cron: "0 0 * * *"
+    # 每天 00:00 (UTC+8 = 前一天 16:00 UTC) 运行；如需其它时区改这里
+    - cron: "0 16 * * *"
   workflow_dispatch: {}
 
 permissions:

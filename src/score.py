@@ -82,16 +82,19 @@ class Judgment:
     summary: str
     score: int
     kind: str = "summary"  # as-is | translate | summary | deepdive
+    title: str = ""  # 中文标题（LLM 生成/翻译；空则回退 item['title']）
     deepdive: str = ""  # 「深度解读」：仅 kind=deepdive 时由阶段二生成
     references: list = None  # 深度解读引用的权威源：[(title, url), ...]，仅深度解读使用
 
     def to_markdown(self, item: dict) -> str:
         tags = ", ".join(self.tags)
+        # 标题：LLM 生成的中文标题优先，空则回退抓取原文标题
+        title = self.title.strip() or item.get("title", "")
         lines = [
             "---",
             f"date: {item['date']}",
             f"tags: {tags}",
-            f"title: {item['title']}",
+            f"title: {title}",
             f"score: {self.score}",
             f"kind: {self.kind}",
         ]
@@ -181,7 +184,7 @@ def _chat_json(api_key: str, base: str, model: str, temperature: float, prompt: 
 
 
 def _call_llm_meta(cfg: dict, item: dict, hint: str) -> Judgment | None:
-    """阶段一：轻量评估（不注入知识库），输出 tags / summary / score / kind。"""
+    """阶段一：轻量评估（不注入知识库），输出 title / tags / summary / score / kind。"""
     client = _llm_client(cfg)
     if client is None:
         return None
@@ -193,9 +196,15 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str) -> Judgment | None:
         "1. as-is：原文已足够精炼、信息完整、可直接面向读者，且原文为中文——直接原样输出，不做摘要、不改写。\n"
         "2. translate：原文已足够精炼、信息完整，但为英文等非中文——翻译成中文原样输出，"
         "保持原文信息量与结构，不压缩、不精炼。\n"
-        "3. summary：原文冗长、结构松散或信息密度低，需要提炼——输出精炼的中文摘要。\n"
+        "3. summary：原文冗长、结构松散或信息密度低，需要提炼——输出中文摘要，保留关键信息。\n"
         "4. deepdive：内容原理性强、反常识、有争议或信息密度极高，值得结合知识库深度展开——"
-        "先输出精炼的中文摘要。\n"
+        "先输出中文摘要，后续会再生成深度解读。\n"
+        "【标题要求】\n"
+        "1. 把原文标题**改写为简洁的中文标题**（如原文已是中文则润色即可）：翻译 + 提炼，"
+        "15-30 字为宜，不用引号、不带「今日/快讯」等前缀。\n"
+        "2. 保留关键专名：机型/品牌/人名/机构（如 Zerno Z1、Gaggia、Barista Hustle）保留原拼写，"
+        "技术词用中文（如 磨豆机、预浸泡、萃取率）。\n"
+        "3. 是编辑标题而非机械翻译：抓住最核心的信息点（谁/什么/结果），删掉修饰与营销话术。\n"
         "【标签要求】\n"
         "1. 不使用固定的 theory/technique/product 这种大类，而是用更具体的小主题，\n"
         "   例如：9-bar、水温、研磨度、布粉wdt、填压、预浸泡、通道效应、萃取率tds、\n"
@@ -206,13 +215,19 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str) -> Judgment | None:
         f"标题：{item.get('title','')}\n"
         f"正文/摘要：{item.get('summary','')}\n\n"
         "【输出要求】\n"
-        "1. tags：2-5 个具体主题标签（同上）。\n"
-        "2. summary：按 kind 说明**处理后作为正文**的内容——as-is=中文原文；"
-        "translate=中文翻译原文；summary/deepdive=精炼中文摘要。\n"
-        "3. kind：as-is / translate / summary / deepdive 四选一，严格小写。\n"
-        "4. score：0-100 质量分（信息价值与可读性）。\n\n"
-        '只输出 JSON，格式：{"tags":["标签1","标签2"],"summary":"处理后正文",'
-        '"kind":"summary","score":0-100}'
+        "1. title：中文标题（同上）。\n"
+        "2. tags：2-5 个具体主题标签（同上）。\n"
+        "3. summary：按 kind 说明**处理后作为正文**的内容——as-is=中文原文；"
+        "translate=中文翻译原文；summary/deepdive=中文摘要。\n"
+        "   **摘要长度按来源类型区分**：\n"
+        "   - 新闻媒体类（Sprudge/Perfect Daily Grind/Daily Coffee News 等）：200-400 字，"
+        "     保留时间、具体数据、关键结论、人物引述，用 2-3 个要点或自然段，禁止一句话概括；\n"
+        "   - 社区讨论类（Reddit/论坛）：150-300 字，保留机型、参数、优缺点、结论；\n"
+        "   - 原文信息本身很少（<100 字）时：如实转述即可，不要为凑字数注水。\n"
+        "4. kind：as-is / translate / summary / deepdive 四选一，严格小写。\n"
+        "5. score：0-100 质量分（信息价值与可读性），高分要有区分度，避免集中于 70-75。\n\n"
+        '只输出 JSON，格式：{"title":"中文标题","tags":["标签1","标签2"],'
+        '"summary":"处理后正文","kind":"summary","score":0-100}'
     )
     data = _chat_json(api_key, base, model, temperature, prompt)
     if data is None:
@@ -227,6 +242,7 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str) -> Judgment | None:
         summary=data.get("summary", item.get("summary", "")),
         score=int(data.get("score", 70)),
         kind=_norm_kind(data.get("kind")),
+        title=str(data.get("title", "") or "").strip(),
         deepdive="",
         references=None,
     )
