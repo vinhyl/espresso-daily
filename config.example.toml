@@ -177,6 +177,10 @@ per_source_delay = 2.0
 user_agent = "EspressoDaily/0.1 (+https://github.com/your-org/espresso-daily)"
 # 回看窗口（天）：只处理最近 N 天发布的条目
 lookback_days = 3
+# 归档时区：海外 RSS 发布时间多为 UTC，按此时区截日，使「当天采集」归当天。
+# 国内用户为主，建议 Asia/Shanghai（=GMT+8）。留空则回退机器本地时区。
+# 注意：Windows 显式用时区名需先装 tzdata（pip install tzdata）；留空则无需。
+timezone = "Asia/Shanghai"
 
 # ----------------------------------------------------------------------------
 # 基础 / 常青知识库（私有，不参与建站）

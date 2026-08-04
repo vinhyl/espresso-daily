@@ -17,7 +17,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import email.utils
 import re
+import zoneinfo
+from datetime import datetime, timezone
 
 import feedparser
 import httpx
@@ -119,20 +122,49 @@ def fetch_search(source: dict, lookback_days: int = 3) -> list[dict]:
     return items
 
 
-def _to_date(entry) -> str | None:
+def _resolve_tz(tzname: str | None):
+    """解析目标时区（aware tzinfo）。
+
+    - 配置了且可用（需 tzdata，Windows 上尤其）则用之；
+    - 否则回退机器本地时区，保证零依赖也能按本地时区截日。
+    """
+    if tzname:
+        try:
+            return zoneinfo.ZoneInfo(tzname)
+        except Exception as e:
+            print(f"[fetch] 时区 '{tzname}' 不可用（可能缺 tzdata）：{e}；回退本地时区")
+    return dt.datetime.now().astimezone().tzinfo
+
+
+def _to_date(entry, tz=None) -> str | None:
+    """从 RSS 条目提取发布日期（YYYY-MM-DD）。
+
+    feedparser 的 *_parsed 字段均为 UTC。先转目标时区（tz）再截日，
+    使海外源（如 Reddit）按本地/目标时区归档，避免「当天内容归到昨天」。
+    """
     for key in ("published_parsed", "updated_parsed", "pub_date_parsed"):
         val = entry.get(key)
         if val:
             try:
-                return dt.datetime(*val[:6]).strftime("%Y-%m-%d")
+                utc_dt = datetime(*val[:6], tzinfo=timezone.utc)
+                local_dt = utc_dt.astimezone(tz) if tz else utc_dt
+                return local_dt.strftime("%Y-%m-%d")
             except Exception:
                 pass
-    # 退而求其次：尝试解析字符串
+    # 退而求其次：尝试解析 RFC 822 日期字符串（无 *_parsed 时）。
+    # 标准库 email.utils.parsedate_to_datetime 返回带时区的 datetime；
+    # 无时区信息则按 RFC 视为 UTC。
     for key in ("published", "updated", "pubDate"):
         s = entry.get(key)
         if s:
             try:
-                return dt.datetime(*feedparser._parse_date(s)[:6]).strftime("%Y-%m-%d")
+                dt_obj = email.utils.parsedate_to_datetime(s)
+                if dt_obj is None:
+                    continue
+                if dt_obj.tzinfo is None:
+                    dt_obj = dt_obj.replace(tzinfo=timezone.utc)
+                local_dt = dt_obj.astimezone(tz) if tz else dt_obj
+                return local_dt.strftime("%Y-%m-%d")
             except Exception:
                 pass
     return None
@@ -146,7 +178,7 @@ def _clean(html: str | None) -> str:
     return re.sub(r"\s+", " ", txt).strip()
 
 
-def fetch_rss(source: dict, lookback_days: int = 3) -> list[dict]:
+def fetch_rss(source: dict, lookback_days: int = 3, tz=None) -> list[dict]:
     ua = "EspressoDaily/0.1 (+https://github.com/your-org/espresso-daily)"
     try:
         resp = httpx.get(source["url"], headers={"User-Agent": ua}, timeout=20, follow_redirects=True)
@@ -156,13 +188,15 @@ def fetch_rss(source: dict, lookback_days: int = 3) -> list[dict]:
         print(f"[fetch] 源 {source['name']} 抓取失败：{e}")
         return []
 
-    cutoff = dt.datetime.now() - dt.timedelta(days=lookback_days)
+    # cutoff 以目标时区的「今天」为基准，与归档日期同一时区，避免时区错位
+    today = (dt.datetime.now(tz) if tz else dt.datetime.now()).date()
+    cutoff = today - dt.timedelta(days=lookback_days)
     items: list[dict] = []
     for e in parsed.entries:
-        date = _to_date(e)
+        date = _to_date(e, tz)
         if date:
             try:
-                if dt.datetime.strptime(date, "%Y-%m-%d") < cutoff:
+                if dt.datetime.strptime(date, "%Y-%m-%d").date() < cutoff:
                     continue
             except Exception:
                 pass
@@ -183,11 +217,12 @@ def fetch_rss(source: dict, lookback_days: int = 3) -> list[dict]:
 def fetch_all(cfg: dict | None = None) -> list[dict]:
     cfg = cfg or load_config()
     lookback = cfg.get("fetch", {}).get("lookback_days", 3)
+    tz = _resolve_tz(cfg.get("fetch", {}).get("timezone"))
     sources = [s for s in cfg.get("sources", []) if s.get("enabled")]
     items: list[dict] = []
     for s in sources:
         if s.get("type") == "rss":
-            items.extend(fetch_rss(s, lookback))
+            items.extend(fetch_rss(s, lookback, tz))
         elif s.get("type") == "search":
             items.extend(fetch_search(s, lookback))
         else:

@@ -130,7 +130,13 @@ python -m src.pipeline --dry-run         # 只预览将收录的内容
 - 去重：同一 `source_url` / 标题不重复收录。
 
 **C. 定时自动化（推荐）**
-`.github/workflows/daily.yml` 每天 08:00 (UTC+8) 运行管线并提交 `content/` 与 `public/`，推送即触发部署。在仓库 Secrets 配置 `ESPRESSO_LLM_API_KEY` 即可启用 LLM（workflow 通过环境变量 `ESPRESSO_LLM_ENABLED=true` 强制开启，无需改 config；未配置 key 时自动回退规则评分）。
+`.github/workflows/daily.yml` 每天 **00:40 (UTC+8)**（cron `40 16 * * *` UTC）运行管线并提交 `content/` 与 `public/`，推送即触发部署。在仓库 Secrets 配置 `ESPRESSO_LLM_API_KEY` 即可启用 LLM（workflow 通过环境变量 `ESPRESSO_LLM_ENABLED=true` 强制开启，无需改 config；未配置 key 时自动回退规则评分）。
+
+> **时区与归档**：日报以国内用户为主，**所有文章统一按北京时间（Asia/Shanghai / GMT+8）归档**。
+> `fetch.py` 把 RSS 的 UTC 发布时间先转换到北京时间再截日，避免 Reddit / Sprudge 等海外源
+> 在北京时间当天凌晨（对应 UTC 前一天傍晚至深夜）发布的内容被错归到「昨天」
+> （详见代码注释与 `config.example.toml` 的 `[fetch].timezone`）。该归档时区**不影响定时任务**——
+> workflow 的 cron 用 UTC 书写，换算见 `.github/workflows/daily.yml` 注释。
 
 ## 部署到 Cloudflare Pages
 
