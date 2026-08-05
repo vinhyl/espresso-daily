@@ -100,6 +100,7 @@ url = "https://dailycoffeenews.com/feed/"
 category_hint = "industry"          # 强化意式过滤：设备/浓缩/奶咖自动化/商用工作流/行业变化
 lang = "en"
 enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 include_any = ["espresso", "espresso machine", "grinder", "extraction", "milk", "steaming", "latte", "cappuccino", "portafilter", "pressure", "commercial", "cafe", "roaster", "roasting", "coffee machine", "brew", "brewing", "supply", "oem", "launch", "new product", "product", "barista", "lever", "boiler", "introduc", "unveil", "acquire", "partnership"]
 exclude_any = ["fair trade", "health", "wellness", "nutrit", "benefit of coffee", "study finds"]
 
@@ -110,6 +111,7 @@ url = "https://www.baristahustle.com/feed/"   # /blog/feed/ 实测返回 403，�
 category_hint = "tech_experiment"            # 优先级最高的差异化技术源
 lang = "en"
 enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 lookback_days = 21                          # 发文频率低（约月更），放宽回看窗口以稳定收录
 
 [[sources]]
@@ -132,6 +134,7 @@ url = "https://coffeeadastra.com/feed/"
 category_hint = "tech_experiment"   # 专家实验与建模，须二次过滤仅取 Espresso/Extraction/Physics
 lang = "en"
 enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 include_any = ["espresso", "extraction", "physics", "pressure", "flow", "channel", "grind", "puck", "percolation", "profiling", "tds", "dial", "brew", "temperature", "water", "dose"]
 exclude_any = ["pourover", "pour over", "v60", "aeropress", "french press", "cold brew"]
 
@@ -142,6 +145,7 @@ url = "https://coffeegeek.com/feed/"
 category_hint = "independent_review"   # 独立设备评测，每期最多 1 条
 lang = "en"
 enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 max_per_source = 1
 include_any = ["espresso", "grinder", "portafilter", "espresso machine", "milk", "steam", "brew", "review", "coffee", "machine"]
 exclude_any = ["pourover", "pour over", "v60", "drip", "french press", "cold brew", "tea"]
@@ -153,6 +157,7 @@ url = "https://www.wholelattelove.com/blogs/tech-tips.atom"
 category_hint = "tutorial"          # 品牌教程，与 Clive 合计每期最多 1 条
 lang = "en"
 enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 quota_group = "gear_tutorials"
 max_per_group = 1
 include_any = ["espresso", "grinder", "machine", "portafilter", "milk", "steam", "brew", "dial", "tds", "cleaning", "maintenance", "pressurized", "crema"]
@@ -165,6 +170,7 @@ url = "https://www.clivecoffee.com/blogs/learn.atom"
 category_hint = "tutorial"          # 品牌教程，与 WLL 合计每期最多 1 条
 lang = "en"
 enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 quota_group = "gear_tutorials"
 max_per_group = 1
 include_any = ["espresso", "grinder", "machine", "portafilter", "milk", "steam", "brew", "dial", "tds", "cleaning", "maintenance", "pressurized", "crema"]
@@ -240,6 +246,16 @@ lookback_days = 3
 # 注意：Windows 显式用时区名需先装 tzdata（pip install tzdata）；留空则无需。
 timezone = "Asia/Shanghai"
 
+# ---- 按需全文抓取（阶段二）----
+# 全文是稀缺资源：只有 ① 源上标了 full_text = true ② 该条通过 LLM 初筛(accept)
+# 两个条件同时满足，才会去抓原文正文。目的是避免基于截断 RSS 摘要虚构参数/细节，
+# 同时不给源站带来全量抓取压力。
+fulltext_enabled = true
+fulltext_max_chars = 12000     # 正文截断上限（控制送进 LLM 的 token）
+fulltext_timeout = 20          # 单篇超时（秒）
+fulltext_delay = 1.0           # 每篇全文之间的间隔（秒），礼貌抓取
+fulltext_max_per_run = 12      # 每次运行最多抓多少篇全文（成本闸门）
+
 # ----------------------------------------------------------------------------
 # 基础 / 常青知识库（私有，不参与建站）
 # 每个主题一篇（knowledge/<slug>.md），是对多篇权威文章的综合，正文末尾用
@@ -253,3 +269,23 @@ timezone = "Asia/Shanghai"
 dir = "knowledge"
 mode = "all"
 max_chars = 8000
+
+# ----------------------------------------------------------------------------
+# 每周学术雷达（阶段三，type=academic）
+# 仅供周级 CI（weekly.yml → `python -m src.academic`）使用，**不要开启 enabled**，
+# 否则每日管线会把论文抓进 content/，污染每日站点流。weekly 模式会无视 enabled
+# 直接消费所有 type=academic 的源。
+#   academic_must    : 多个检索词，全部以 OpenAlex abstract_search 串联 → AND 约束
+#   academic_exclude : 标题/摘要命中任一即丢弃（非意式主题）
+#   academic_filters : 透传 OpenAlex filter 串（如 from_publication_date 限定年份）
+# ----------------------------------------------------------------------------
+[[sources]]
+name = "Espresso Extraction (OpenAlex+Crossref)"
+type = "academic"
+category_hint = "research"
+lang = "en"
+enabled = false
+academic_must = ["espresso", "extraction"]
+academic_exclude = ["tea", "pourover", "pour over", "cold brew", "caffeine health", "decaf", "sensory", "consumer"]
+academic_filters = "from_publication_date:2015-01-01"
+max_per_source = 8

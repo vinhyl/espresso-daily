@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import os
 import re
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -19,6 +21,7 @@ from src import fetch as fetch_mod  # noqa: E402
 from src import score as score_mod  # noqa: E402
 from src import build as build_mod  # noqa: E402
 from src import knowledge as knowledge_mod  # noqa: E402
+from src import quality_report as quality_mod  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +192,20 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
     min_score = cfg.get("llm", {}).get("min_score", 60)
     max_per_day = cfg.get("llm", {}).get("max_per_day", 30)
 
-    items = fetch_mod.fetch_all(cfg)
+    today = dt.datetime.now().strftime("%Y-%m-%d")
+    run_date = date_override or today
+    fcfg = cfg.get("fetch", {})
+    ua = fcfg.get("user_agent") or fetch_mod.DEFAULT_UA
+    # 全文抓取成本闸门（阶段二）：全文是稀缺资源，按预算/开关/间隔约束
+    fulltext_enabled = bool(fcfg.get("fulltext_enabled", True))
+    fulltext_budget = int(fcfg.get("fulltext_max_per_run", 12))
+    fulltext_timeout = float(fcfg.get("fulltext_timeout", 20))
+    fulltext_delay = float(fcfg.get("fulltext_delay", 0)) or 0
+    ft_count = 0
+
+    # 抓取失败清单由 pipeline 持有，全文抓取结束后统一落盘（阶段二质量报告消费）
+    failures: list[dict] = []
+    items = fetch_mod.fetch_all(cfg, failures=failures)
     existing = _existing_keys(content_dir)
 
     # 基础/常青知识库：加载一次，供每条新闻注入背景上下文（最全面、无额外依赖）
@@ -197,37 +213,83 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
     if knowledge_entries:
         print(f"[pipeline] 已加载常青知识库 {len(knowledge_entries)} 个主题（作为深度解读背景）")
 
-    # —— 1) 评估所有存活条目（规则回退快；LLM 启用时也先评估再配额）——
-    #    源级关键词预过滤已在 fetch 层完成，这里不再被无关内容浪费 LLM/算力。
+    # 运行质量报告（阶段二）：贯穿整轮，最后落盘
+    quality = quality_mod.QualityReport(cfg, run_date)
+
+    # —— 1) 两阶段评估：初筛（便宜闸门）→ 按需全文 → 六维精评 ——
+    #    源级关键词预过滤已在 fetch 层完成；这里先初筛淘汰不值钱的内容，
+    #    再对「白名单 + 初筛通过」的条目抓全文（稀缺资源），最后精评。
     judged = []
     for it in items:
-        kb_ctx = knowledge_mod.build_context(it, knowledge_entries, cfg)
-        j = score_mod.judge(it, cfg, hint=it.get("hint", "mixed"), knowledge_ctx=kb_ctx)
-        if j.score < min_score:
+        hint = it.get("hint", "mixed")
+
+        # Pass 1：初筛（LLM 优先，未启用回退关键词）
+        pre = score_mod.prescreen(it, cfg, hint)
+        quality.record_candidate(it, pre.get("espresso_core", False))
+        if not pre["accept"]:
+            quality.record_reject(it, pre["reason"], "prescreen")
             continue
-        date = date_override or it.get("published") or __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+
+        # Pass 1.5：按需全文抓取（仅白名单源；稀缺资源，初筛通过才抓，受预算约束）
+        if (fulltext_enabled and it.get("allow_full_text") and it.get("link")
+                and ft_count < fulltext_budget):
+            ft = fetch_mod.fetch_full_article(
+                {"name": it.get("source", "")}, it["link"],
+                user_agent=ua, failures=failures, timeout=fulltext_timeout,
+            )
+            if ft:
+                it["full_text"] = ft
+                ft_count += 1
+                if fulltext_delay:
+                    time.sleep(fulltext_delay)
+
+        # Pass 2：六维精评（带 content_type；有全文则基于全文，避免虚构参数）
+        kb_ctx = knowledge_mod.build_context(it, knowledge_entries, cfg)
+        j = score_mod.judge(
+            it, cfg, hint=hint, knowledge_ctx=kb_ctx,
+            content_type=pre["content_type"],
+        )
+        j.prescreen_reason = pre["reason"]
+        if j.score < min_score:
+            quality.record_reject(it, f"score {j.score} < {min_score}", "score")
+            continue
+
+        date = date_override or it.get("published") or today
         it["date"] = date
         it["tags"] = []
         key_url = ("url", it["source_url"]) if it.get("source_url") else None
         key_title = ("title", it["title"])
         if (key_url and key_url in existing) or key_title in existing:
             print(f"[pipeline] 跳过重复：{it['title']}")
+            quality.record_reject(it, "已收录（去重）", "dedup")
+            quality.dedup_skipped += 1
             continue
         judged.append((date, it, j))
+        quality.record_accept(it, j)
 
-    # —— 2) 排序：评分降序；社区类按互动量（赞/评论）做同分 tiebreaker ——
+    # —— 2) 48h 事件聚类：同题只留最完整一条，其余折叠进 related ——
+    before = len(judged)
+    judged = score_mod.cluster_events(judged, window_hours=48)
+    quality.cluster_folds += (before - len(judged))
+
+    # —— 3) 排序：评分降序；社区类按互动量（赞/评论）做同分 tiebreaker ——
     judged.sort(key=lambda t: (t[2].score, t[1].get("engagement", 0)), reverse=True)
 
-    # —— 3) 配额 + 硬上限（按 category_hint 分层 + 每源/每组上限 + max_per_day）——
+    # —— 4) 配额 + 硬上限（按 category_hint 分层 + 每源/每组上限 + max_per_day）——
     selected = _apply_quota(judged, cfg)
     if len(judged) != len(selected):
         print(f"[pipeline] 配额过滤：{len(judged)} 条候选 → 选中 {len(selected)} 条")
 
-    # —— 4) 生成 Markdown（仅对最终入选者，避免为被淘汰项浪费 LLM/算力）——
+    # —— 5) 生成 Markdown（仅对最终入选者，避免为被淘汰项浪费 LLM/算力）——
     accepted = [(date, it, j, j.to_markdown(it)) for date, it, j in selected]
 
     # —— 每日总标题（headline）：按日聚合生成，供归档列表/首页近期卡片使用 ——
     headlines = _generate_headlines(cfg, accepted, content_dir)
+
+    # —— 运行质量报告 + 抓取失败落盘（阶段二，始终产出；reports/ 已 gitignore）——
+    fetch_mod.write_failure_report(failures)
+    quality.merge_failures(failures)
+    quality.write()
 
     if dry_run:
         print(f"\n[dry-run] 将收录 {len(accepted)} 条：")

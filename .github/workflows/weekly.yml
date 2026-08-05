@@ -1,0 +1,47 @@
+# 每周学术雷达：独立周级 CI，与每日 RSS 管线解耦。
+# 抓取 OpenAlex + Crossref → 建研究卡 → 写 research/ → 生成知识库补丁提案 → 周报 + 抽检清单。
+# 调度错峰每日管线（每日 16:40 UTC），本周一定时 17:10 UTC（周二 01:10 UTC+8）。
+name: Weekly Academic Radar
+
+on:
+  schedule:
+    - cron: "10 17 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  academic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install jinja2 markdown feedparser httpx python-dotenv
+
+      - name: Run weekly academic radar
+        env:
+          # 在仓库 Secrets 中配置；不启用 LLM 时留空也能用规则回退建卡
+          ESPRESSO_LLM_API_KEY: ${{ secrets.ESPRESSO_LLM_API_KEY }}
+          ESPRESSO_LLM_ENABLED: "true"
+        run: python -m src.academic
+
+      - name: Commit research cards & weekly report if changed
+        run: |
+          git config user.name "espresso-bot"
+          git config user.email "bot@espresso.daily"
+          git add research
+          if git diff --cached --quiet; then
+            echo "本周无新研究卡"
+          else
+            git commit -m "weekly: academic radar $(date +'%Y-%m-%d')"
+            git push
+          fi

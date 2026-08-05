@@ -17,6 +17,11 @@ venv/
 # 运行时产物（抓取失败报告等，按需本地查看，不提交）
 reports/
 
+# 阶段三临时产物：知识库补丁提案（应用后由人工提交 knowledge/，提案本身不提交）
+knowledge/patches/
+
+# 注意：research/ 由周级 CI 提交到仓库（研究卡 + 周报 + 抽检清单），供人工复核，不忽略。
+
 # 系统 / 编辑器
 .DS_Store
 Thumbs.db
