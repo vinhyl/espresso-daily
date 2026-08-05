@@ -56,8 +56,29 @@ DEFAULT_ACADEMIC_SOURCE = {
 # 研究卡 kb_topic → 既有知识库 slug 映射，避免补丁落到平行新建文件造成主题碎片化。
 # key 为 LLM/规则回退可能给出的主题词（小写包含匹配），value 为 knowledge/ 下的文件名（去后缀）。
 KB_TOPIC_TO_SLUG = {
+    # 注意：匹配为「按插入顺序的子串包含，命中即停」。更具体的 key 必须排在
+    # 泛化 key 之前（如「压力曲线」须在「压力」之前、「奶泡」须在「温度」之前、
+    # 「平刀/锥刀」须在「粒径」之前，否则永远被泛化 key 截胡）。
+    # 因此 2026-08 扩充的具体 key 整体前置，既有的泛化 key 集中在末尾。
+    # —— 扩充条目映射（具体 key，前置）——
+    "压力曲线": "pressure-profiling", "流量曲线": "pressure-profiling", "profiling": "pressure-profiling",
+    "渗流": "percolation-physics", "percolation": "percolation-physics",
+    "建模": "percolation-physics", "模型": "percolation-physics",
+    "油脂": "crema", "crema": "crema", "克里玛": "crema",
+    "turbo": "turbo-shot", "快萃": "turbo-shot",
+    "磨豆机": "burr-geometry", "平刀": "burr-geometry", "锥刀": "burr-geometry",
+    "残粉": "grinder-workflow", "静电": "grinder-workflow", "rdt": "grinder-workflow",
+    "粉碗": "basket-design", "basket": "basket-design",
+    "锅炉": "temperature-stability", "pid": "temperature-stability", "热稳定": "temperature-stability",
+    "水质": "water-chemistry", "钙镁": "water-chemistry", "硬度": "water-chemistry", "碱度": "water-chemistry",
+    "烘焙": "roast-freshness", "养豆": "roast-freshness", "新鲜度": "roast-freshness",
+    "处理法": "bean-processing", "豆种": "bean-processing", "拼配": "bean-processing",
+    "感官": "sensory-diagnostics", "风味": "sensory-diagnostics",
+    "奶泡": "milk-science", "牛奶": "milk-science",
+    "折射": "measurement-workflow", "refractometer": "measurement-workflow",
+    # —— 既有映射（泛化 key，置于具体 key 之后）——
     "萃取": "extraction-rate-tds", "萃取率": "extraction-rate-tds", "tds": "extraction-rate-tds",
-    "研磨": "grind", "粒径": "grind", "刀盘": "grind",
+    "研磨": "grind", "粒径": "grind", "刀盘": "burr-geometry",
     "粉量": "dose-ratio", "粉水比": "dose-ratio", "ratio": "dose-ratio", "dose": "dose-ratio",
     "水温": "temperature", "温度": "temperature",
     "预浸泡": "preinfusion", "pre-infusion": "preinfusion",
