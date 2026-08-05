@@ -59,6 +59,10 @@
 `exclude_any`（命中任一即丢弃，如晒图/购买咨询/健康/公平贸易），在 `fetch_all` 内于
 LLM 评估**之前**执行，避免把无关内容送进稀缺的 LLM/算力。详见 `config.example.toml` 各源配置。
 
+### 全文抓取白名单（`full_text`）
+
+白名单来源（A4 Barista Hustle、A5 Coffee Ad Astra、A6 CoffeeGeek、A3 Daily Coffee News、A7 Whole Latte Love、A8 Clive Coffee）在 config 里标了 `full_text = true`。管线仅在**初筛 `accept` 之后**才对这些源抓原文全文做精评——全文是稀缺资源（有流量与封禁成本），避免基于截断 RSS 摘要虚构参数与结论。成本闸门见 `config.example.toml` 的 `[fetch].fulltext_*`（每运最大篇数 / 间隔 / 超时）。详见 README「编辑判断管线 → 按需全文抓取」。
+
 ## B. 社区 / 论坛
 
 | # | 名称 | 地址 / Feed | 覆盖内容 | 状态 |
@@ -156,6 +160,16 @@ python -m scripts.new_day 2026-08-03
 LLM/规则阶段会自动为它们打上动态标签。
 
 ---
+
+## E. 学术源（每周学术雷达，type=academic）
+
+每周学术雷达专用，由 `weekly.yml` 周级 CI 抓取，**不进每日 `content/`**。在 `config.example.toml` 里 `type="academic"`、`enabled=false`（专为周级 CI 服务；`enabled=false` 确保每日管线不会把它误抓进每日站点流）。
+
+| 名称 | 检索方式 | 覆盖内容 | 状态 |
+|---|---|---|---|
+| **Espresso Extraction (OpenAlex + Crossref)** | `academic_must=["espresso","extraction"]`（严格 AND）+ `academic_exclude`（tea / cold brew / sensory / consumer…）+ `academic_filters`（如 `from_publication_date:2015-01-01`） | 意式萃取同行评审论文、预印本；Crossref 补全 DOI/期刊 | ✅ 新增（严格 AND + 咖啡领域消歧，剔除 ESPReSSO 单点登录、cembalo 乐器等缩写歧义） |
+
+检索细节与消歧规则、研究卡字段、知识库补丁机制见 README「每周学术雷达（阶段三）」。产物落点：`research/`（研究卡+周报，周级 CI 提交）、`knowledge/patches/`（补丁提案，未应用不入库）、`reports/`（抽检清单，gitignore）。
 
 ## 限流与礼貌
 
