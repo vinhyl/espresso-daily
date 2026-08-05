@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import datetime as dt
 import email.utils
+import json
+import os
 import re
+import time
 import zoneinfo
 from datetime import datetime, timezone
 
@@ -26,6 +29,17 @@ import feedparser
 import httpx
 
 from src.content_loader import load_config
+
+# 默认 UA：config 缺省时回退（与 config.example.toml [fetch].user_agent 保持一致）
+DEFAULT_UA = "EspressoDaily/0.1 (+https://github.com/your-org/espresso-daily)"
+DEFAULT_SEARCH_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+# 抓取失败报告目录（供阶段二质量报告使用）
+REPORTS_DIR = "reports"
+
+# 全文抓取（阶段二）：全文是稀缺资源，仅对白名单来源 + 初筛 accept 的条目按需抓取
+FULLTEXT_MAX_CHARS = 12000   # 正文截断上限（避免超长文烧 LLM token）
+FULLTEXT_MIN_CHARS = 200     # 低于此长度视为提取失败，回退 RSS 摘要
+FULLTEXT_MIN_PARAGRAPH = 40  # 段落最短字符数，短于此的多为导航/版权/按钮文案
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +117,9 @@ SEARCH_PARSERS = {
 }
 
 
-def fetch_search(source: dict, lookback_days: int = 3) -> list[dict]:
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+def fetch_search(source: dict, lookback_days: int = 3, user_agent: str | None = None,
+                 failures: list | None = None) -> list[dict]:
+    ua = user_agent or DEFAULT_SEARCH_UA
     parser = SEARCH_PARSERS.get(source.get("parser"))
     if not parser:
         print(f"[fetch] 源 {source['name']} 的 parser={source.get('parser')} 未实现，跳过。")
@@ -116,7 +131,7 @@ def fetch_search(source: dict, lookback_days: int = 3) -> list[dict]:
         raw = resp.json()
         items = parser(raw, source)
     except Exception as e:
-        print(f"[fetch] 源 {source['name']} 搜索抓取失败：{e}")
+        _record_failure(failures, source, source.get("url", ""), e)
         return []
     print(f"[fetch] 源 {source['name']}（search/{source.get('parser')}）：{len(items)} 条")
     return items
@@ -171,22 +186,37 @@ def _to_date(entry, tz=None) -> str | None:
 
 
 def _clean(html: str | None) -> str:
+    """去标签 + 解码 HTML 实体 + 压缩空白。
+
+    实体解码不可省：RSS/网页正文里的 &rsquo; &#8217; &amp; 若原样送进 LLM 与页面，
+    会变成 "don&rsquo;t" 这类脏字符串。
+    """
+    import html as _html
     import re
     if not html:
         return ""
     txt = re.sub(r"<[^>]+>", " ", html or "")
+    txt = _html.unescape(txt)
     return re.sub(r"\s+", " ", txt).strip()
 
 
-def fetch_rss(source: dict, lookback_days: int = 3, tz=None) -> list[dict]:
-    ua = "EspressoDaily/0.1 (+https://github.com/your-org/espresso-daily)"
+def fetch_rss(source: dict, lookback_days: int = 3, tz=None,
+              user_agent: str | None = None, failures: list | None = None) -> list[dict]:
+    ua = user_agent or DEFAULT_UA
     try:
         resp = httpx.get(source["url"], headers={"User-Agent": ua}, timeout=20, follow_redirects=True)
         resp.raise_for_status()
         parsed = feedparser.parse(resp.content)
     except Exception as e:
-        print(f"[fetch] 源 {source['name']} 抓取失败：{e}")
+        _record_failure(failures, source, source.get("url", ""), e)
         return []
+
+    # 解析异常（feedparser bozo）：仅在确实无条目时记录，避免噪声
+    if parsed.get("bozo") and parsed.get("bozo_exception") and not parsed.entries:
+        _record_failure(
+            failures, source, source.get("url", ""),
+            Exception(f"feed parse error: {parsed['bozo_exception']}"),
+        )
 
     # cutoff 以目标时区的「今天」为基准，与归档日期同一时区，避免时区错位
     today = (dt.datetime.now(tz) if tz else dt.datetime.now()).date()
@@ -201,7 +231,8 @@ def fetch_rss(source: dict, lookback_days: int = 3, tz=None) -> list[dict]:
             except Exception:
                 pass
         items.append({
-            "title": (e.get("title") or "").strip(),            "summary": _clean(e.get("summary") or e.get("description")),
+            "title": (e.get("title") or "").strip(),
+            "summary": _clean(e.get("summary") or e.get("description")),
             "link": e.get("link", ""),
             # source_url = 文章链接（去重、卡片来源链接用）；空链接回退源站地址
             "source_url": e.get("link", "") or source.get("url", ""),
@@ -209,25 +240,464 @@ def fetch_rss(source: dict, lookback_days: int = 3, tz=None) -> list[dict]:
             "source": source["name"],
             "lang": source.get("lang", ""),
             "hint": source.get("category_hint", "mixed"),
+            # 互动量（Reddit 等带赞/评论的源）：社区类作排序信号
+            "engagement": _extract_engagement(e),
+            # 配额元数据：透传给 pipeline，按每源/每组上限裁剪
+            "max_per_source": source.get("max_per_source"),
+            "quota_group": source.get("quota_group"),
+            "max_per_group": source.get("max_per_group"),
+            # 全文白名单：仅 config 中 full_text=true 的源允许在初筛通过后抓全文
+            "allow_full_text": bool(source.get("full_text", False)),
         })
     print(f"[fetch] 源 {source['name']}：{len(items)} 条（近 {lookback_days} 天）")
     return items
 
 
-def fetch_all(cfg: dict | None = None) -> list[dict]:
+def _extract_engagement(entry: dict) -> int:
+    """从 RSS 条目抽取互动量（赞/分），用于社区类排序信号；无则 0。"""
+    for key in ("ups", "score", "likes", "rating"):
+        v = entry.get(key)
+        if isinstance(v, (int, float)) and v > 0:
+            return int(v)
+    return 0
+
+
+def _record_failure(failures: list | None, source: dict, url: str, exc: Exception,
+                    stage: str = "feed") -> None:
+    """把一次抓取/解析失败结构化为记录，累积进 failures 列表并打印。
+
+    字段：source / url / stage / timestamp / error_type / status_code /
+    rate_limited / blocked / message —— 供阶段二质量报告统计
+    （每源失败率、是否限流、失败发生在 feed 还是 fulltext 阶段等）。
+    """
+    rec = {
+        "source": source.get("name", "") if isinstance(source, dict) else str(source),
+        "url": url,
+        "stage": stage,   # feed | fulltext | academic
+        "timestamp": dt.datetime.now().isoformat(timespec="seconds"),
+        "error_type": "unknown",
+        "status_code": None,
+        "rate_limited": False,
+        "blocked": False,
+        "message": str(exc),
+    }
+    if isinstance(exc, httpx.HTTPStatusError):
+        rec["error_type"] = "http_error"
+        rec["status_code"] = exc.response.status_code
+        rec["rate_limited"] = exc.response.status_code == 429
+        rec["blocked"] = exc.response.status_code in (401, 403, 407, 429)
+    elif isinstance(exc, httpx.HTTPError):
+        rec["error_type"] = "http_error"
+    if failures is not None:
+        failures.append(rec)
+    name = rec["source"] or url
+    print(f"[fetch] 源 {name} 抓取/解析失败：{exc}")
+
+
+def _source_prefilter(source: dict, items: list[dict]) -> list[dict]:
+    """按源的 include_any / exclude_any 关键词做二次过滤（不消耗 LLM）。
+
+    - include_any：若设置，标题+摘要须至少命中其一（意式相关性闸门）；
+    - exclude_any：若设置，命中任一即丢弃（晒图/购买咨询/健康/公平贸易等）。
+    """
+    inc = [k.lower() for k in (source.get("include_any") or [])]
+    exc = [k.lower() for k in (source.get("exclude_any") or [])]
+    if not inc and not exc:
+        return items
+    out = []
+    for it in items:
+        text = (it.get("title", "") + " " + it.get("summary", "")).lower()
+        if exc and any(k in text for k in exc):
+            continue
+        if inc and not any(k in text for k in inc):
+            continue
+        out.append(it)
+    if len(out) != len(items):
+        print(f"[fetch] 源 {source['name']} 关键词预过滤：{len(items)} → {len(out)} 条")
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 按需全文抓取（阶段二前置）
+#
+# 为什么需要：RSS 摘要普遍被截断（几十到两百字），基于截断摘要做精评容易让 LLM
+# 「补全」出原文没有的参数与结论。全文能消除这类虚构，但抓全文有流量与封禁成本，
+# 因此它是**稀缺资源**：只对 ① 白名单来源（config 里 `full_text = true`）
+# ② 初筛 accept 的条目，二者同时满足才抓。
+#
+# 实现取舍：不引入 readability-lxml / beautifulsoup 等重依赖（CI 装依赖只有 5 个包，
+# 且 daily.yml 未装它们），改用「去样板块 + 取段落」的轻量启发式：
+#   1) 剥离 script/style/nav/header/footer/aside/form/figure 等非正文块；
+#   2) 优先在 <article> / <main> 容器内找正文，找不到再退回全文档；
+#   3) 收集 <p>/<li> 文本，丢弃过短段落（导航、版权、按钮），拼接成纯文本。
+# 提取不到足够长度（< FULLTEXT_MIN_CHARS）就返回空串，调用方回退 RSS 摘要。
+# ---------------------------------------------------------------------------
+
+_BOILERPLATE_TAGS = (
+    "script", "style", "nav", "header", "footer", "aside",
+    "form", "figure", "figcaption", "noscript", "iframe", "svg",
+)
+
+
+def _strip_boilerplate(html: str) -> str:
+    """移除脚本/样式/导航等非正文块与 HTML 注释。"""
+    out = re.sub(r"<!--.*?-->", " ", html, flags=re.S)
+    for tag in _BOILERPLATE_TAGS:
+        out = re.sub(rf"<{tag}\b.*?</{tag}\s*>", " ", out, flags=re.S | re.I)
+        out = re.sub(rf"<{tag}\b[^>]*/?>", " ", out, flags=re.I)
+    return out
+
+
+def _main_container(html: str) -> str:
+    """优先返回 <article> / <main> 容器内容；无则返回原文档。
+
+    多个 <article> 时取最长的一个（列表页每条摘要也是 <article>，正文页正文最长）。
+    """
+    for tag in ("article", "main"):
+        blocks = re.findall(rf"<{tag}\b[^>]*>(.*?)</{tag}\s*>", html, flags=re.S | re.I)
+        if blocks:
+            best = max(blocks, key=len)
+            if len(re.sub(r"<[^>]+>", "", best)) >= FULLTEXT_MIN_CHARS:
+                return best
+    return html
+
+
+def _extract_paragraphs(html: str, min_len: int = FULLTEXT_MIN_PARAGRAPH) -> str:
+    """收集 <p>/<li> 文本，过滤过短段落后拼接为纯文本。"""
+    chunks: list[str] = []
+    seen: set[str] = set()
+    for m in re.finditer(r"<(p|li)\b[^>]*>(.*?)</\1\s*>", html, flags=re.S | re.I):
+        text = _clean(m.group(2))
+        if len(text) < min_len or text in seen:
+            continue
+        seen.add(text)
+        chunks.append(text)
+    return "\n\n".join(chunks)
+
+
+def extract_article_text(html: str, max_chars: int = FULLTEXT_MAX_CHARS) -> str:
+    """从 HTML 抽取正文纯文本；提取不到足够内容返回空串。"""
+    if not html:
+        return ""
+    cleaned = _strip_boilerplate(html)
+    text = _extract_paragraphs(_main_container(cleaned))
+    if len(text) < FULLTEXT_MIN_CHARS:
+        # 容器内段落太少：退回整篇文档再试一次（部分站点不用 <p> 包正文）
+        text = _extract_paragraphs(cleaned)
+    if len(text) < FULLTEXT_MIN_CHARS:
+        # 仍不足：放宽段落长度门槛（短句排版的站点）
+        text = _extract_paragraphs(cleaned, min_len=20)
+    if len(text) < FULLTEXT_MIN_CHARS:
+        return ""
+    return text[:max_chars].strip()
+
+
+def fetch_full_article(source: dict, link: str, user_agent: str | None = None,
+                       failures: list | None = None, timeout: float = 20,
+                       max_chars: int = FULLTEXT_MAX_CHARS) -> str:
+    """按需抓取单篇文章全文，返回正文纯文本；失败/提取不到返回空串。
+
+    调用方（pipeline）负责判断「是否该抓」——白名单 + 初筛 accept，本函数只管抓。
+    失败复用 `_record_failure`，统一进 reports/fetch_failures_<date>.json。
+    """
+    if not link:
+        return ""
+    ua = user_agent or DEFAULT_UA
+    # 部分站点（实测 Whole Latte Love）对 bot UA 直接断连，重试一次浏览器 UA
+    last_exc: Exception | None = None
+    for attempt_ua in (ua, DEFAULT_SEARCH_UA):
+        try:
+            resp = httpx.get(
+                link,
+                headers={"User-Agent": attempt_ua, "Accept": "text/html,application/xhtml+xml"},
+                timeout=timeout, follow_redirects=True,
+            )
+            resp.raise_for_status()
+            ctype = resp.headers.get("content-type", "")
+            if ctype and "html" not in ctype.lower():
+                return ""
+            text = extract_article_text(resp.text, max_chars=max_chars)
+            if not text:
+                print(f"[fetch] 全文提取为空（回退摘要）：{link}")
+            return text
+        except Exception as e:
+            last_exc = e
+            continue
+    _record_failure(failures, source, link, last_exc or Exception("unknown"), stage="fulltext")
+    return ""
+
+
+def write_failure_report(failures: list) -> None:
+    """把本次运行的抓取失败清单写入 reports/（按日期聚合，供质量报告消费）。
+
+    公开函数：全文抓取发生在 pipeline 初筛之后，因此由 pipeline 在全部抓取
+    动作结束后统一落盘，避免 feed 阶段先写一次、全文阶段的失败漏记。
+    """
+    # 始终覆盖写入（即使为空）：保证按日期聚合的文件只反映「本次运行」，
+    # 避免上一次运行残留的失败记录污染当次质量报告的「抓取失败维度」。
+    try:
+        os.makedirs(REPORTS_DIR, exist_ok=True)
+        stamp = dt.datetime.now().strftime("%Y-%m-%d")
+        path = os.path.join(REPORTS_DIR, f"fetch_failures_{stamp}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+                    "failures": failures,
+                },
+                f, ensure_ascii=False, indent=2,
+            )
+        if failures:
+            print(f"[fetch] 已写入抓取失败报告：{path}（{len(failures)} 条）")
+    except Exception as e:
+        print(f"[fetch] 失败报告写入异常（不影响主流程）：{e}")
+
+
+# ---------------------------------------------------------------------------
+# 学术雷达适配器（阶段三）：OpenAlex + Crossref
+#
+# 与每日 RSS **解耦**——学术源只在周级 CI（src/academic.py + weekly.yml）里被调用，
+# 不进每日 pipeline（每日 config 不含 academic 源）。这里仍挂在 fetch_all 的
+# type 分发上，是为了让「按 type 分发」的契约完整、未来也可复用。
+#
+# 检索策略（严格，避免召回泛咖啡论文）：
+#   - academic_must：多个词，全部以 abstract_search 串联 → AND 约束；
+#   - academic_exclude：标题/摘要命中任一即丢弃（手冲/茶/零售等非意式主题）；
+#   - academic_filters：透传 OpenAlex filter 串（如 from_publication_date）。
+# OpenAlex 与 Crossref 双源取并集，按 DOI 去重。
+# ---------------------------------------------------------------------------
+OPENALEX_MAILTO = "espresso-daily@example.com"
+_OPENALEX_API = "https://api.openalex.org/works"
+_CROSSREF_API = "https://api.crossref.org/works"
+
+
+def _oa_reconstruct_abstract(inv: dict | None) -> str:
+    """OpenAlex 摘要以倒排索引给出（{词: [位置,...]}），重建为可读文本。"""
+    if not inv:
+        return ""
+    slots: list[str] = []
+    for word, positions in inv.items():
+        for p in positions:
+            if p >= len(slots):
+                slots.extend([""] * (p - len(slots) + 1))
+            slots[p] = word
+    return " ".join(slots).strip()
+
+
+def _strip_jats(xml: str | None) -> str:
+    """Crossref 摘要是 JATS XML，剥掉标签并解码实体。"""
+    if not xml:
+        return ""
+    import re
+    txt = re.sub(r"<[^>]+>", " ", xml)
+    try:
+        import html as _html
+        txt = _html.unescape(txt)
+    except Exception:
+        pass
+    return re.sub(r"\s+", " ", txt).strip()
+
+
+def _oa_evidence_level(w: dict) -> str:
+    otype = (w.get("type") or "").lower()
+    if otype == "preprint":
+        return "预印本"
+    if otype in ("article", "journal-article"):
+        return "同行评审"
+    if otype in ("review", "peer_review"):
+        return "综述"
+    return "其他"
+
+
+# 咖啡领域确认词（不含查询词 espresso/extraction 本身，避免 ESPReSSO 单点登录等
+# 缩写/领域歧义误报）。命中其一才视为真正的咖啡主题。
+_COFFEE_DOMAIN = [
+    "coffee", "bean", "beans", "roast", "roasting", "brew", "brewing", "crema",
+    "barista", "caffeine", "beverage", "grinder", "portafilter", "arabica",
+    "robusta", "tamp", "puck", "ristretto", "lungo", "foam", "steam", "dose",
+    "shot", "shots", "tds", "extraction yield", "coffee machine", "espresso machine",
+]
+# 强非咖啡排除词：命中即直接排除（与 academic_exclude 配置互补）。
+_STRONG_NON_COFFEE = [
+    "single sign", "sign-on", "sign on", "sso", "login", "authentication",
+    "identity management", "oauth", "authorization", "password", "harpsichord",
+    "cembalo", "piano", "violin",
+]
+
+
+def fetch_academic(source: dict, lookback_days: int = 365, user_agent: str | None = None,
+                   failures: list | None = None) -> list[dict]:
+    """抓取学术源（OpenAlex + Crossref），返回与 RSS 同构的条目。
+
+    额外字段（供研究卡使用）：doi / authors / venue / evidence_level / otype。
+    """
+    ua = user_agent or DEFAULT_UA
+    must = [str(t).strip() for t in (source.get("academic_must")
+                                      or [source.get("academic_query")] or []) if str(t).strip()]
+    exclude = [str(t).lower() for t in (source.get("academic_exclude") or [])]
+    extra = source.get("academic_filters") or ""
+    per_page = int(source.get("max_per_source") or source.get("academic_per_page") or 10)
+    if not must:
+        print(f"[fetch] 学术源 {source.get('name')} 未配置 academic_must，跳过")
+        return []
+
+    items: list[dict] = []
+    seen_doi: set[str] = set()
+
+    def _excluded(title: str, abstract: str, enforce_must: bool = True) -> bool:
+        blob = f"{title} {abstract}".lower()
+        # 1) 配置化的排除词（tea/cold brew/sensory 等）
+        if exclude and any(t in blob for t in exclude):
+            return True
+        # 2) 强非咖啡词（单点登录/乐器等缩写歧义）
+        if any(t in blob for t in _STRONG_NON_COFFEE):
+            return True
+        # 3) 咖啡领域确认：至少命中一个咖啡领域词。
+        #    有摘要时以「标题+摘要」为准；无摘要（老论文）只以标题为准——
+        #    这样 ESPReSSO(SSO)/cembalo 之类无咖啡词的标题会被正确排除。
+        scope = blob if abstract else title.lower()
+        if not any(t in scope for t in _COFFEE_DOMAIN):
+            return True
+        # 4) must 词严格 AND（仅 Crossref 需要；OpenAlex 的 abstract.search 已内置 AND，
+        #    且其匹配项的摘要可能因 abstract_inverted_index 缺失而无法本地重建，重检会误杀）。
+        if enforce_must and not all(m in scope for m in must):
+            return True
+        return False
+
+    def _mk(title, abstract, date, doi, authors, venue, evidence_level, otype, landing,
+            enforce_must: bool = True):
+        if _excluded(title, abstract, enforce_must):
+            return
+        if len(abstract) > 4000:
+            abstract = abstract[:4000]
+        # DOI 可能已是完整 URL（Crossref/OpenAlex 均返回 https://doi.org/...），
+        # 避免重复拼接前缀导致 https://doi.org/https://doi.org/...
+        if doi:
+            link = doi if str(doi).startswith("http") else f"https://doi.org/{doi}"
+        else:
+            link = landing or ""
+        items.append({
+            "title": _clean(title),
+            "summary": abstract,
+            "published": (date or "")[:10],
+            "source": source.get("name", "Academic"),
+            "source_url": link,
+            "link": link,
+            "hint": "research",
+            "doi": doi or "",
+            "authors": authors,
+            "venue": venue,
+            "evidence_level": evidence_level,
+            "otype": otype,
+            "engagement": 0,
+        })
+
+    # —— OpenAlex ——
+    try:
+        # 注意：OpenAlex 过滤键是 abstract.search（点号），不是 abstract_search
+        filters = [f"abstract.search:{t}" for t in must]
+        if extra:
+            filters.append(extra)
+        params = {
+            "filter": ",".join(filters),
+            "per-page": per_page,
+            "mailto": OPENALEX_MAILTO,
+        }
+        r = httpx.get(_OPENALEX_API, headers={"User-Agent": ua}, params=params,
+                      timeout=30, follow_redirects=True)
+        r.raise_for_status()
+        for w in r.json().get("results", []):
+            doi = (w.get("doi") or "").lower()
+            if doi:
+                if doi in seen_doi:
+                    continue
+                seen_doi.add(doi)
+            abstract = _oa_reconstruct_abstract(w.get("abstract_inverted_index"))
+            authors = [a.get("author", {}).get("display_name", "")
+                       for a in w.get("authorships", [])][:6]
+            venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name") or ""
+            landing = ((w.get("primary_location") or {}).get("landing_page_url")
+                       or doi or "")
+            _mk(w.get("title_display") or w.get("title") or "", abstract,
+                w.get("publication_date") or "",
+                doi, authors, venue, _oa_evidence_level(w), w.get("type") or "", landing,
+                enforce_must=False)
+    except Exception as e:
+        _record_failure(failures, source, _OPENALEX_API, e, stage="academic-openalex")
+
+    # —— Crossref（补足 OpenAlex 未覆盖的期刊，按 DOI 去重）——
+    try:
+        params = {
+            "query": " ".join(must),
+            "rows": per_page,
+            "select": "title,DOI,abstract,issued,author,container-title,URL,type",
+        }
+        r = httpx.get(_CROSSREF_API, headers={"User-Agent": ua}, params=params,
+                      timeout=30, follow_redirects=True)
+        r.raise_for_status()
+        for it in r.json().get("message", {}).get("items", []):
+            doi = (it.get("DOI") or "").lower()
+            if doi:
+                if doi in seen_doi:
+                    continue
+                seen_doi.add(doi)
+            title = " ".join(it.get("title", [])) if it.get("title") else ""
+            abstract = _strip_jats(it.get("abstract"))
+            # Crossref issued 日期
+            parts = (it.get("issued", {}).get("date-parts") or [[]])[0]
+            date = "-".join(str(p) for p in (parts or [])[:3])
+            authors = [a.get("given", "") + " " + a.get("family", "")
+                       for a in it.get("author", [])][:6]
+            authors = [a.strip() for a in authors if a.strip()]
+            venue = " ".join(it.get("container-title", []) or [])
+            _mk(title, abstract, date, doi, authors, venue, "同行评审",
+                it.get("type") or "", it.get("URL") or "")
+    except Exception as e:
+        _record_failure(failures, source, _CROSSREF_API, e, stage="academic-crossref")
+
+    print(f"[fetch] 学术源 {source.get('name')}：{len(items)} 条（OpenAlex+Crossref 去重后）")
+    return items
+
+
+def fetch_all(cfg: dict | None = None, failures: list | None = None) -> list[dict]:
+    """抓取全部启用源并归一化去重。
+
+    `failures` 传入时由调用方（pipeline）持有并在全文抓取后统一落盘；
+    不传则本函数自行创建并立即写报告（保持独立运行 `python -m src.fetch` 的行为）。
+    """
     cfg = cfg or load_config()
-    lookback = cfg.get("fetch", {}).get("lookback_days", 3)
-    tz = _resolve_tz(cfg.get("fetch", {}).get("timezone"))
+    fcfg = cfg.get("fetch", {})
+    lookback = fcfg.get("lookback_days", 3)
+    tz = _resolve_tz(fcfg.get("timezone"))
+    ua = fcfg.get("user_agent") or DEFAULT_UA
+    delay = fcfg.get("per_source_delay") or 0
     sources = [s for s in cfg.get("sources", []) if s.get("enabled")]
     items: list[dict] = []
+    own_failures = failures is None
+    failures = [] if failures is None else failures
     for s in sources:
+        # 每源可单独覆盖回看窗口（如 Reddit top 周榜需要更宽）
+        lb = s.get("lookback_days", lookback)
         if s.get("type") == "rss":
-            items.extend(fetch_rss(s, lookback, tz))
+            src_items = fetch_rss(s, lb, tz, user_agent=ua, failures=failures)
         elif s.get("type") == "search":
-            items.extend(fetch_search(s, lookback))
+            src_items = fetch_search(s, lb, user_agent=ua, failures=failures)
+        elif s.get("type") == "academic":
+            # 学术雷达：周级 CI 调用；每日 config 一般不含此类源
+            src_items = fetch_academic(s, lb, user_agent=ua, failures=failures)
         else:
             # manual / 未实现：当前阶段以人工精选为主，标注跳过
             print(f"[fetch] 源 {s['name']}（{s.get('type')}）暂跳过，建议人工精选或接入搜索适配器。")
+            continue
+        # 源级关键词二次过滤（不耗 LLM），再并入总池
+        src_items = _source_prefilter(s, src_items)
+        items.extend(src_items)
+        # 礼貌抓取：每源间隔（0 或未配置则跳过）
+        if delay:
+            time.sleep(delay)
+    # 抓取失败结构化记录（供阶段二质量报告）；由 pipeline 持有时延后统一落盘
+    if own_failures:
+        write_failure_report(failures)
     # 去重（按 link，空 link 按 title）
     seen = set()
     unique = []
