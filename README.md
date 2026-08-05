@@ -170,7 +170,7 @@ python -m src.academic apply knowledge/patches/2026-08-04-xxx.json   # 应用一
 
 ```markdown
 ---
-date: 2026-08-02
+date: 2026-08-05
 title: 标题
 source: 来源名（可选）
 source_url: https://（可选）
