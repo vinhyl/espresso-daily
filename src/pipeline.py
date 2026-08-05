@@ -181,6 +181,7 @@ def _generate_headlines(cfg: dict, accepted: list, content_dir: str) -> dict[str
 
 
 def run(config_path: str = "config.toml", dry_run: bool = False, date_override: str | None = None):
+    t_start = time.time()
     cfg = load_config(config_path)
     # 环境变量可强制启用 LLM（CI/定时任务用）：ESPRESSO_LLM_ENABLED=1|true|yes
     # 允许 workflow 在不修改 config.toml 的情况下启用 LLM（API key 走 ESPRESSO_LLM_API_KEY）。
@@ -191,6 +192,19 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
     content_dir = site["content_dir"]
     min_score = cfg.get("llm", {}).get("min_score", 60)
     max_per_day = cfg.get("llm", {}).get("max_per_day", 30)
+
+    # —— 启动摘要（诊断用）：确认 LLM 是否启用、key 是否存在、阈值 ——
+    llm_cfg = cfg.get("llm", {})
+    _llm_on = bool(llm_cfg.get("enabled"))
+    _key_env = llm_cfg.get("api_key_env", "ESPRESSO_LLM_API_KEY")
+    _key = os.getenv(_key_env, "").strip()
+    print("=" * 60)
+    print(f"[pipeline] 启动摘要：run_date={date_override or dt.datetime.now().strftime('%Y-%m-%d')}")
+    print(f"[pipeline]   llm.enabled={_llm_on} | {_key_env} 已配置={'是' if _key else '否'}"
+          f" | min_score={min_score} | max_per_day={max_per_day}")
+    print(f"[pipeline]   启用源数={sum(1 for s in cfg.get('sources', []) if s.get('enabled'))}"
+          f" | lookback_days={cfg.get('fetch', {}).get('lookback_days', 3)}")
+    print("=" * 60)
 
     today = dt.datetime.now().strftime("%Y-%m-%d")
     run_date = date_override or today
@@ -205,8 +219,11 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
 
     # 抓取失败清单由 pipeline 持有，全文抓取结束后统一落盘（阶段二质量报告消费）
     failures: list[dict] = []
+    t_fetch = time.time()
     items = fetch_mod.fetch_all(cfg, failures=failures)
+    print(f"[pipeline] 阶段一 抓取：{len(items)} 条候选 / 耗时 {time.time()-t_fetch:.1f}s")
     existing = _existing_keys(content_dir)
+    print(f"[pipeline] 已收录去重键：{len(existing)} 个")
 
     # 基础/常青知识库：加载一次，供每条新闻注入背景上下文（最全面、无额外依赖）
     knowledge_entries = knowledge_mod.load_knowledge(cfg)
@@ -220,6 +237,11 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
     #    源级关键词预过滤已在 fetch 层完成；这里先初筛淘汰不值钱的内容，
     #    再对「白名单 + 初筛通过」的条目抓全文（稀缺资源），最后精评。
     judged = []
+    n_prescreen_pass = n_prescreen_reject = 0
+    n_score_reject = 0
+    n_llm_engine = n_rule_engine = 0
+    n_fulltext_ok = n_fulltext_fail = 0
+    prescreen_reasons: dict[str, int] = {}
     for it in items:
         hint = it.get("hint", "mixed")
 
@@ -228,7 +250,10 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
         quality.record_candidate(it, pre.get("espresso_core", False))
         if not pre["accept"]:
             quality.record_reject(it, pre["reason"], "prescreen")
+            n_prescreen_reject += 1
+            prescreen_reasons[pre.get("reason") or "未知"] = prescreen_reasons.get(pre.get("reason") or "未知", 0) + 1
             continue
+        n_prescreen_pass += 1
 
         # Pass 1.5：按需全文抓取（仅白名单源；稀缺资源，初筛通过才抓，受预算约束）
         if (fulltext_enabled and it.get("allow_full_text") and it.get("link")
@@ -240,8 +265,11 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
             if ft:
                 it["full_text"] = ft
                 ft_count += 1
+                n_fulltext_ok += 1
                 if fulltext_delay:
                     time.sleep(fulltext_delay)
+            else:
+                n_fulltext_fail += 1
 
         # Pass 2：六维精评（带 content_type；有全文则基于全文，避免虚构参数）
         kb_ctx = knowledge_mod.build_context(it, knowledge_entries, cfg)
@@ -250,8 +278,13 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
             content_type=pre["content_type"],
         )
         j.prescreen_reason = pre["reason"]
+        if pre.get("engine") == "llm":
+            n_llm_engine += 1
+        else:
+            n_rule_engine += 1
         if j.score < min_score:
             quality.record_reject(it, f"score {j.score} < {min_score}", "score")
+            n_score_reject += 1
             continue
 
         date = date_override or it.get("published") or today
@@ -266,6 +299,12 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
             continue
         judged.append((date, it, j))
         quality.record_accept(it, j)
+
+    print(f"[pipeline] 阶段二 初筛：通过 {n_prescreen_pass} / 拒绝 {n_prescreen_reject}"
+          f"（理由分布：{dict(sorted(prescreen_reasons.items(), key=lambda kv: -kv[1]))}）")
+    print(f"[pipeline] 阶段三 全文抓取：成功 {n_fulltext_ok} / 失败 {n_fulltext_fail}")
+    print(f"[pipeline] 阶段四 精评引擎：LLM {n_llm_engine} / 规则 {n_rule_engine}"
+          f" | 低于 min_score({min_score}) 被拒 {n_score_reject}")
 
     # —— 2) 48h 事件聚类：同题只留最完整一条，其余折叠进 related ——
     before = len(judged)
@@ -329,7 +368,8 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
     # 生成静态站
     if written:
         build_mod.build(config_path)
-    print(f"[pipeline] 完成，新增 {written} 条，总标题 {headline_written} 个。")
+    print(f"[pipeline] 完成，新增 {written} 条，总标题 {headline_written} 个。"
+          f"（总耗时 {time.time()-t_start:.1f}s）")
 
 
 def main():

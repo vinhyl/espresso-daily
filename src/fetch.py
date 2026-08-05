@@ -675,8 +675,10 @@ def fetch_all(cfg: dict | None = None, failures: list | None = None) -> list[dic
     items: list[dict] = []
     own_failures = failures is None
     failures = [] if failures is None else failures
+    t0 = time.time()
     for s in sources:
         # 每源可单独覆盖回看窗口（如 Reddit top 周榜需要更宽）
+        st = time.time()
         lb = s.get("lookback_days", lookback)
         if s.get("type") == "rss":
             src_items = fetch_rss(s, lb, tz, user_agent=ua, failures=failures)
@@ -692,6 +694,7 @@ def fetch_all(cfg: dict | None = None, failures: list | None = None) -> list[dic
         # 源级关键词二次过滤（不耗 LLM），再并入总池
         src_items = _source_prefilter(s, src_items)
         items.extend(src_items)
+        print(f"[fetch] 源 {s['name']}：{len(src_items)} 条 / {time.time()-st:.1f}s")
         # 礼貌抓取：每源间隔（0 或未配置则跳过）
         if delay:
             time.sleep(delay)
@@ -707,6 +710,10 @@ def fetch_all(cfg: dict | None = None, failures: list | None = None) -> list[dic
             continue
         seen.add(key)
         unique.append(it)
+    print(f"[fetch] 汇总：{len(sources)} 个启用源 → 原始 {len(items)} 条 → 去重后 {len(unique)} 条"
+          f" / 失败 {len(failures)} 次 / 总耗时 {time.time()-t0:.1f}s")
+    for rec in failures:
+        print(f"[fetch]   失败记录：{rec.get('source')} | {rec.get('error_type')} | {rec.get('message')[:100]}")
     return unique
 
 
