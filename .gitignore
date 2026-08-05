@@ -14,6 +14,9 @@ __pycache__/
 .venv/
 venv/
 
+# 运行时产物（抓取失败报告等，按需本地查看，不提交）
+reports/
+
 # 系统 / 编辑器
 .DS_Store
 Thumbs.db

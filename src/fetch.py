@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import datetime as dt
 import email.utils
+import json
+import os
 import re
+import time
 import zoneinfo
 from datetime import datetime, timezone
 
@@ -26,6 +29,12 @@ import feedparser
 import httpx
 
 from src.content_loader import load_config
+
+# 默认 UA：config 缺省时回退（与 config.example.toml [fetch].user_agent 保持一致）
+DEFAULT_UA = "EspressoDaily/0.1 (+https://github.com/your-org/espresso-daily)"
+DEFAULT_SEARCH_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+# 抓取失败报告目录（供阶段二质量报告使用）
+REPORTS_DIR = "reports"
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +112,9 @@ SEARCH_PARSERS = {
 }
 
 
-def fetch_search(source: dict, lookback_days: int = 3) -> list[dict]:
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+def fetch_search(source: dict, lookback_days: int = 3, user_agent: str | None = None,
+                 failures: list | None = None) -> list[dict]:
+    ua = user_agent or DEFAULT_SEARCH_UA
     parser = SEARCH_PARSERS.get(source.get("parser"))
     if not parser:
         print(f"[fetch] 源 {source['name']} 的 parser={source.get('parser')} 未实现，跳过。")
@@ -116,7 +126,7 @@ def fetch_search(source: dict, lookback_days: int = 3) -> list[dict]:
         raw = resp.json()
         items = parser(raw, source)
     except Exception as e:
-        print(f"[fetch] 源 {source['name']} 搜索抓取失败：{e}")
+        _record_failure(failures, source, source.get("url", ""), e)
         return []
     print(f"[fetch] 源 {source['name']}（search/{source.get('parser')}）：{len(items)} 条")
     return items
@@ -178,15 +188,23 @@ def _clean(html: str | None) -> str:
     return re.sub(r"\s+", " ", txt).strip()
 
 
-def fetch_rss(source: dict, lookback_days: int = 3, tz=None) -> list[dict]:
-    ua = "EspressoDaily/0.1 (+https://github.com/your-org/espresso-daily)"
+def fetch_rss(source: dict, lookback_days: int = 3, tz=None,
+              user_agent: str | None = None, failures: list | None = None) -> list[dict]:
+    ua = user_agent or DEFAULT_UA
     try:
         resp = httpx.get(source["url"], headers={"User-Agent": ua}, timeout=20, follow_redirects=True)
         resp.raise_for_status()
         parsed = feedparser.parse(resp.content)
     except Exception as e:
-        print(f"[fetch] 源 {source['name']} 抓取失败：{e}")
+        _record_failure(failures, source, source.get("url", ""), e)
         return []
+
+    # 解析异常（feedparser bozo）：仅在确实无条目时记录，避免噪声
+    if parsed.get("bozo") and parsed.get("bozo_exception") and not parsed.entries:
+        _record_failure(
+            failures, source, source.get("url", ""),
+            Exception(f"feed parse error: {parsed['bozo_exception']}"),
+        )
 
     # cutoff 以目标时区的「今天」为基准，与归档日期同一时区，避免时区错位
     today = (dt.datetime.now(tz) if tz else dt.datetime.now()).date()
@@ -201,7 +219,8 @@ def fetch_rss(source: dict, lookback_days: int = 3, tz=None) -> list[dict]:
             except Exception:
                 pass
         items.append({
-            "title": (e.get("title") or "").strip(),            "summary": _clean(e.get("summary") or e.get("description")),
+            "title": (e.get("title") or "").strip(),
+            "summary": _clean(e.get("summary") or e.get("description")),
             "link": e.get("link", ""),
             # source_url = 文章链接（去重、卡片来源链接用）；空链接回退源站地址
             "source_url": e.get("link", "") or source.get("url", ""),
@@ -209,25 +228,128 @@ def fetch_rss(source: dict, lookback_days: int = 3, tz=None) -> list[dict]:
             "source": source["name"],
             "lang": source.get("lang", ""),
             "hint": source.get("category_hint", "mixed"),
+            # 互动量（Reddit 等带赞/评论的源）：社区类作排序信号
+            "engagement": _extract_engagement(e),
+            # 配额元数据：透传给 pipeline，按每源/每组上限裁剪
+            "max_per_source": source.get("max_per_source"),
+            "quota_group": source.get("quota_group"),
+            "max_per_group": source.get("max_per_group"),
         })
     print(f"[fetch] 源 {source['name']}：{len(items)} 条（近 {lookback_days} 天）")
     return items
 
 
+def _extract_engagement(entry: dict) -> int:
+    """从 RSS 条目抽取互动量（赞/分），用于社区类排序信号；无则 0。"""
+    for key in ("ups", "score", "likes", "rating"):
+        v = entry.get(key)
+        if isinstance(v, (int, float)) and v > 0:
+            return int(v)
+    return 0
+
+
+def _record_failure(failures: list | None, source: dict, url: str, exc: Exception) -> None:
+    """把一次抓取/解析失败结构化为记录，累积进 failures 列表并打印。
+
+    字段：source / url / timestamp / error_type / status_code / rate_limited /
+    blocked / message —— 供阶段二质量报告统计（每源失败率、是否限流等）。
+    """
+    rec = {
+        "source": source.get("name", "") if isinstance(source, dict) else str(source),
+        "url": url,
+        "timestamp": dt.datetime.now().isoformat(timespec="seconds"),
+        "error_type": "unknown",
+        "status_code": None,
+        "rate_limited": False,
+        "blocked": False,
+        "message": str(exc),
+    }
+    if isinstance(exc, httpx.HTTPStatusError):
+        rec["error_type"] = "http_error"
+        rec["status_code"] = exc.response.status_code
+        rec["rate_limited"] = exc.response.status_code == 429
+        rec["blocked"] = exc.response.status_code in (401, 403, 407, 429)
+    elif isinstance(exc, httpx.HTTPError):
+        rec["error_type"] = "http_error"
+    if failures is not None:
+        failures.append(rec)
+    name = rec["source"] or url
+    print(f"[fetch] 源 {name} 抓取/解析失败：{exc}")
+
+
+def _source_prefilter(source: dict, items: list[dict]) -> list[dict]:
+    """按源的 include_any / exclude_any 关键词做二次过滤（不消耗 LLM）。
+
+    - include_any：若设置，标题+摘要须至少命中其一（意式相关性闸门）；
+    - exclude_any：若设置，命中任一即丢弃（晒图/购买咨询/健康/公平贸易等）。
+    """
+    inc = [k.lower() for k in (source.get("include_any") or [])]
+    exc = [k.lower() for k in (source.get("exclude_any") or [])]
+    if not inc and not exc:
+        return items
+    out = []
+    for it in items:
+        text = (it.get("title", "") + " " + it.get("summary", "")).lower()
+        if exc and any(k in text for k in exc):
+            continue
+        if inc and not any(k in text for k in inc):
+            continue
+        out.append(it)
+    if len(out) != len(items):
+        print(f"[fetch] 源 {source['name']} 关键词预过滤：{len(items)} → {len(out)} 条")
+    return out
+
+
+def _write_failure_report(failures: list) -> None:
+    """把本次运行的抓取失败清单写入 reports/（按日期聚合，供质量报告消费）。"""
+    if not failures:
+        return
+    try:
+        os.makedirs(REPORTS_DIR, exist_ok=True)
+        stamp = dt.datetime.now().strftime("%Y-%m-%d")
+        path = os.path.join(REPORTS_DIR, f"fetch_failures_{stamp}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+                    "failures": failures,
+                },
+                f, ensure_ascii=False, indent=2,
+            )
+        print(f"[fetch] 已写入抓取失败报告：{path}（{len(failures)} 条）")
+    except Exception as e:
+        print(f"[fetch] 失败报告写入异常（不影响主流程）：{e}")
+
+
 def fetch_all(cfg: dict | None = None) -> list[dict]:
     cfg = cfg or load_config()
-    lookback = cfg.get("fetch", {}).get("lookback_days", 3)
-    tz = _resolve_tz(cfg.get("fetch", {}).get("timezone"))
+    fcfg = cfg.get("fetch", {})
+    lookback = fcfg.get("lookback_days", 3)
+    tz = _resolve_tz(fcfg.get("timezone"))
+    ua = fcfg.get("user_agent") or DEFAULT_UA
+    delay = fcfg.get("per_source_delay") or 0
     sources = [s for s in cfg.get("sources", []) if s.get("enabled")]
     items: list[dict] = []
+    failures: list[dict] = []
     for s in sources:
+        # 每源可单独覆盖回看窗口（如 Reddit top 周榜需要更宽）
+        lb = s.get("lookback_days", lookback)
         if s.get("type") == "rss":
-            items.extend(fetch_rss(s, lookback, tz))
+            src_items = fetch_rss(s, lb, tz, user_agent=ua, failures=failures)
         elif s.get("type") == "search":
-            items.extend(fetch_search(s, lookback))
+            src_items = fetch_search(s, lb, user_agent=ua, failures=failures)
         else:
             # manual / 未实现：当前阶段以人工精选为主，标注跳过
             print(f"[fetch] 源 {s['name']}（{s.get('type')}）暂跳过，建议人工精选或接入搜索适配器。")
+            continue
+        # 源级关键词二次过滤（不耗 LLM），再并入总池
+        src_items = _source_prefilter(s, src_items)
+        items.extend(src_items)
+        # 礼貌抓取：每源间隔（0 或未配置则跳过）
+        if delay:
+            time.sleep(delay)
+    # 抓取失败结构化记录（供阶段二质量报告）
+    _write_failure_report(failures)
     # 去重（按 link，空 link 按 title）
     seen = set()
     unique = []

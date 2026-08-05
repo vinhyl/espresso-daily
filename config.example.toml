@@ -47,8 +47,8 @@ api_key_env = "ESPRESSO_LLM_API_KEY"
 model = "deepseek-chat"
 # 评分阈值：低于此分的内容不收录
 min_score = 60
-# 每日最多收录条数（防止爆量）
-max_per_day = 30
+# 每日最多收录条数（硬上限，宁缺毋滥；资讯少的日子可以更少）
+max_per_day = 12
 temperature = 0.2
 # 深度解读开关：true 时，仅 kind=deepdive 的内容会在「阶段二」注入知识库生成
 # 「深度解读」区块（两阶段流程见 src/score.py 模块注释）；false 时所有内容
@@ -76,41 +76,99 @@ headline_max_chars = 100
 name = "Sprudge"
 type = "rss"
 url = "https://sprudge.com/feed"
-category_hint = "mixed"
+category_hint = "industry"          # 低频文化信号源，降为补充，不再承担日报数量
 lang = "en"
 enabled = true
+max_per_source = 1                  # 每期最多 1 条
+include_any = ["espresso", "machine", "grinder", "cafe", "roaster", "coffee", "barista", "latte", "cappuccino", "brew", "launch", "new", "review", "portafilter"]
+exclude_any = ["health", "wellness", "recipe", "food", "cocktail", "beer", "wine"]
 
 [[sources]]
 name = "Perfect Daily Grind"
 type = "rss"
 url = "https://perfectdailygrind.com/feed/"
-category_hint = "mixed"
+category_hint = "industry"          # 降为补充源：仅收影响意式用户的豆种/烘焙/供应链变化
 lang = "en"
 enabled = true
+include_any = ["bean", "roast", "roasting", "origin", "supply", "varietal", "espresso", "blend", "green coffee", "coffee price", "tariff", "export", "harvest", "farm", "producer", "traceab", "trade"]
+exclude_any = ["health", "wellness", "recipe", "brew guide", "how to"]
 
 [[sources]]
 name = "Daily Coffee News"
 type = "rss"
 url = "https://dailycoffeenews.com/feed/"
-category_hint = "mixed"
+category_hint = "industry"          # 强化意式过滤：设备/浓缩/奶咖自动化/商用工作流/行业变化
 lang = "en"
 enabled = true
+include_any = ["espresso", "espresso machine", "grinder", "extraction", "milk", "steaming", "latte", "cappuccino", "portafilter", "pressure", "commercial", "cafe", "roaster", "roasting", "coffee machine", "brew", "brewing", "supply", "oem", "launch", "new product", "product", "barista", "lever", "boiler", "introduc", "unveil", "acquire", "partnership"]
+exclude_any = ["fair trade", "health", "wellness", "nutrit", "benefit of coffee", "study finds"]
 
 [[sources]]
 name = "Barista Hustle"
 type = "rss"
-url = "https://www.baristahustle.com/blog/feed/"
-category_hint = "theory"
+url = "https://www.baristahustle.com/feed/"   # /blog/feed/ 实测返回 403，已改根路径
+category_hint = "tech_experiment"            # 优先级最高的差异化技术源
 lang = "en"
-enabled = false    # ⚠️ Cloudflare 防护，需 fetch 时带浏览器 UA / 代理，先关闭
+enabled = true
+lookback_days = 21                          # 发文频率低（约月更），放宽回看窗口以稳定收录
 
 [[sources]]
 name = "Reddit r/espresso"
 type = "rss"
-url = "https://www.reddit.com/r/espresso/.rss"
-category_hint = "mixed"
+url = "https://www.reddit.com/r/espresso/top/.rss?t=week"   # 改取 top 流，赞/评论作排序信号
+category_hint = "community"          # 降级为社区补充，每期最多 2 条
 lang = "en"
 enabled = true
+lookback_days = 7                    # top 周榜，放宽回看窗口
+max_per_source = 2
+include_any = ["espresso", "machine", "grinder", "dial", "dose", "yield", "flow", "channel", "pressure", "temp", "pid", "mod", "build", "setup", "recipe", "extraction", "puck", "shot", "shots", "barista", "lever", "e61", "portafilter", "scale", "wdt", "distribution", "preinfusion", "steam", "milk", "grind", "burr", "9 bar", "9bar", "profiles", "profiling"]
+exclude_any = ["just got", "finally got", "new setup", "first machine", "help me choose", "recommend me", "rate my", "show off", "my new", "bought", "should i buy", "looking for a", "what should i", "pick between", "gift for"]
+
+# ---- 新增：能改变内容结构的差异化技术/评测源（阶段一 1.2）----
+[[sources]]
+name = "Coffee Ad Astra"
+type = "rss"
+url = "https://coffeeadastra.com/feed/"
+category_hint = "tech_experiment"   # 专家实验与建模，须二次过滤仅取 Espresso/Extraction/Physics
+lang = "en"
+enabled = true
+include_any = ["espresso", "extraction", "physics", "pressure", "flow", "channel", "grind", "puck", "percolation", "profiling", "tds", "dial", "brew", "temperature", "water", "dose"]
+exclude_any = ["pourover", "pour over", "v60", "aeropress", "french press", "cold brew"]
+
+[[sources]]
+name = "CoffeeGeek"
+type = "rss"
+url = "https://coffeegeek.com/feed/"
+category_hint = "independent_review"   # 独立设备评测，每期最多 1 条
+lang = "en"
+enabled = true
+max_per_source = 1
+include_any = ["espresso", "grinder", "portafilter", "espresso machine", "milk", "steam", "brew", "review", "coffee", "machine"]
+exclude_any = ["pourover", "pour over", "v60", "drip", "french press", "cold brew", "tea"]
+
+[[sources]]
+name = "Whole Latte Love"
+type = "rss"
+url = "https://www.wholelattelove.com/blogs/tech-tips.atom"
+category_hint = "tutorial"          # 品牌教程，与 Clive 合计每期最多 1 条
+lang = "en"
+enabled = true
+quota_group = "gear_tutorials"
+max_per_group = 1
+include_any = ["espresso", "grinder", "machine", "portafilter", "milk", "steam", "brew", "dial", "tds", "cleaning", "maintenance", "pressurized", "crema"]
+exclude_any = ["pourover", "cold brew", "tea", "drip"]
+
+[[sources]]
+name = "Clive Coffee"
+type = "rss"
+url = "https://www.clivecoffee.com/blogs/learn.atom"
+category_hint = "tutorial"          # 品牌教程，与 WLL 合计每期最多 1 条
+lang = "en"
+enabled = true
+quota_group = "gear_tutorials"
+max_per_group = 1
+include_any = ["espresso", "grinder", "machine", "portafilter", "milk", "steam", "brew", "dial", "tds", "cleaning", "maintenance", "pressurized", "crema"]
+exclude_any = ["pourover", "cold brew", "tea", "drip"]
 
 # ---- 中文 / 非 RSS 源：通过「自托管 RSSHub」转成 RSS（推荐，最省心） ----
 # 先 `docker run -d --name rsshub -p 1200:1200 diygod/rsshub`，再把下面 URL 的
