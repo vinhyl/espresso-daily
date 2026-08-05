@@ -88,7 +88,7 @@ src/
 assets/               style.css（现代工业/精致风）、app.js（动态标签筛选）
 content/              每日条目（Markdown，流水线或手写；可含「深度解读」区块）
 research/             每周学术雷达研究卡（周级 CI 提交到仓库，不参与建站；供人工抽检）
-knowledge/            基础/常青知识库（私有，每主题一篇多源综合）；patches/ 子目录存补丁提案（未应用前不入库）
+knowledge/            基础/常青知识库（私有，每主题一篇多源综合）；README.md 为长期维护手册（收集/筛选/可靠性/巡检，无 frontmatter 不入库）；patches/ 子目录存补丁提案（未应用前不入库）
 public/               构建产物（Cloudflare Pages 输出目录）
 reports/              运行时产物（质量报告、抓取失败清单、抽检清单；gitignore，不提交）
 scripts/new_day.py    新建一日空白模板
