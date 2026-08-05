@@ -11,14 +11,59 @@
 
 ---
 
-## 1. 收集渠道（按优先级）
+## 1. 收集渠道：广撒网（收集要宽，筛选靠第 2/3 节把关）
 
-| # | 渠道 | 频率 | 怎么用 |
-|---|---|---|---|
-| 1 | **管线副产品**（缺口信号的第一来源） | 每周 | grep 近期 deepdive 正文中的库外概念；看 quality_report 的 deepdive 条数与 references；看学术补丁「新建 vs 追加」比例（新建多 = 映射/覆盖有缺口） |
-| 2 | **周级学术雷达**（已自动化） | 每周 | `python -m src.academic` 产出研究卡 + 补丁，审核后 apply，追加进对应条目（首选 `percolation-physics` 类综述条目） |
-| 3 | **权威源巡检** | 每月 | Barista Hustle / Coffee Ad Astra / Scott Rao / Socratic Coffee 新文章；Lance Hedrick / Hoffmann 新视频（看标题与结论即可）。只在月度缺口评审时针对性查，不追更 |
-| 4 | **社区高频问题反推** | 每月 | Reddit r/espresso 热帖里反复出现的问题（如残粉、浅烘调参）→ 对应底层条目值得有 |
+> **元规则：下面的名单是「种子」而非「白名单」。** 任何来源只要能通过第 3 节的
+> 可靠性评判即可使用，**不要因为某来源不在名单里就拒绝它**。执行时应主动探索
+> 名单之外的来源；发现可靠新来源时随手补进本表（月度维护动作之一）。
+> 收集阶段的默认姿态是「先记下来」，是否入库由第 2 节三问和第 3 节分级决定。
+
+### 1.0 管线副产品（缺口信号的第一来源，每周）
+grep 近期 deepdive 正文中的库外概念；看 quality_report 的 deepdive 条数与
+references；看学术补丁「新建 vs 追加」比例（新建多 = 映射/覆盖有缺口）。
+
+### 1.1 学术 / 科研
+- 已自动化：OpenAlex + Crossref（周级雷达产出研究卡 + 补丁，审核后 apply）。
+- 主动可查：Google Scholar 关键词订阅；ASIC 会议论文集；UC Davis Coffee Center；
+  Coffee Science 期刊（巴西 UFLA）；World Coffee Research（感官词典、品种研究）；
+  SCA 研究报告。
+
+### 1.2 独立实验 / 深度技术博客
+Barista Hustle（含播客）、Coffee Ad Astra（Jonathan Gagné）、Socratic Coffee、
+Scott Rao、KRUVE（粒径/筛分研究）、Weber Workshops 技术白皮书等。
+
+### 1.3 视频 / 播客创作者
+- YouTube：James Hoffmann、Lance Hedrick、Brian Quan（设备向）、Sprometheus、
+  European Coffee Trip、Sweet Maria's、Boot Coffee 等。
+- 播客：Filter Stories（咖啡科学叙事）、Making Coffee（Lucia Solis，处理法/发酵）、
+  Keys to the Shop（门店运营）等。
+
+### 1.4 行业媒体
+Sprudge、Perfect Daily Grind、Daily Coffee News、Barista Magazine、Standart、
+Roast Magazine、Global Coffee Report、Comunicaffe 等。
+
+### 1.5 社区（经验性说法的富矿，引用时标注确定性）
+r/espresso、r/Coffee、Home-Barista、CoffeeGeek、Decent Diaspora、
+Espresso Aficionados（Discord）、Kaffee-Netz（德语社区）等。
+
+### 1.6 中文渠道
+B站/小红书/知乎的咖啡创作者与话题（如牛小咖等）、微信公众号（咖啡沙龙、
+Torch 炬点、治光师等）、什么值得买、豆瓣小组等。
+中文源以「发现线索」为主，关键结论尽量回溯到更高分级的来源交叉验证。
+
+### 1.7 厂商技术资料（取工程事实，弃营销话术）
+La Marzocco、Decent Espresso（博客+论坛技术浓度高）、Weber Workshops、Baratza、
+Fellow、Acaia、Niche 等的官方文档 / 白皮书。
+
+### 1.8 标准组织与比赛
+SCA（标准体系、25 Magazine）、WBC 等赛事 routine（技术创新的先行指标，
+如新处理法、冷冻研磨往往先出现在赛场）、CQI（Q 体系）。
+
+### 1.9 书籍（长青底层，新条目的骨架来源）
+Illy & Viani《Espresso Coffee: The Science of Quality》、Rao《The Professional
+Barista's Handbook》、Hoffmann《The World Atlas of Coffee》、Hendon &
+Colonna-Dashwood《Water for Coffee》、Gagné《The Physics of Filter Coffee》、
+Hoos《Modulating the Flavor Profile of Coffee》等。
 
 ## 2. 筛选：入库三问
 
@@ -96,7 +141,8 @@ grep -A5 "^references:" content/*.md | tail -20
 ### 每月（约 1 小时）
 - 缺口评审：候选池中凑够 ≥2 独立来源的主题，写 1-3 篇（单篇成本 ≤30 分钟：
   脚手架 → AI 起草 → **人工只做来源真实性与数字出处核查**）。
-- 巡检权威源（渠道 3/4）。
+- 巡检权威源（第 1.2-1.9 节，轮着看，不必每月全覆盖）。
+- **渠道名单维护**：本月实际用到的新来源补进第 1 节对应分类；失效来源标记或移除。
 - 每次入库一个 commit，git log 即库的 changelog。
 
 ### 每季
