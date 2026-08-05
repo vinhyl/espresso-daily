@@ -249,6 +249,8 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
         pre = score_mod.prescreen(it, cfg, hint)
         quality.record_candidate(it, pre.get("espresso_core", False))
         if not pre["accept"]:
+            print(f"[pipeline] 初筛拒 [{pre.get('engine','?')}] {it.get('source','')}："
+                  f"{it['title'][:60]} —— {pre.get('reason','')}")
             quality.record_reject(it, pre["reason"], "prescreen")
             n_prescreen_reject += 1
             prescreen_reasons[pre.get("reason") or "未知"] = prescreen_reasons.get(pre.get("reason") or "未知", 0) + 1
@@ -282,10 +284,17 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
             n_llm_engine += 1
         else:
             n_rule_engine += 1
+        _dims = j.dims or {}
+        _ft = "全文" if it.get("full_text") else "摘要"
+        _d = " | ".join(f"{k}={_dims.get(k, 0)}" for k in ("relevance", "novelty", "actionability",
+                                                          "evidence", "params", "timeliness"))
         if j.score < min_score:
+            print(f"[pipeline] 精评拒 [{j.score}分<{min_score} | {_ft} | {_d}] "
+                  f"{it.get('source','')}：{it['title'][:60]}")
             quality.record_reject(it, f"score {j.score} < {min_score}", "score")
             n_score_reject += 1
             continue
+        print(f"[pipeline] 精评过 [{j.score}分 | {_ft} | {_d}] {it.get('source','')}：{it['title'][:60]}")
 
         date = date_override or it.get("published") or today
         it["date"] = date
