@@ -112,7 +112,7 @@ category_hint = "tech_experiment"            # 优先级最高的差异化技术
 lang = "en"
 enabled = true
 full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
-lookback_days = 21                          # 发文频率低（约月更），放宽回看窗口以稳定收录
+lookback_days = 7                           # 月更源放宽窗口；2026-08-06 由 21 收紧，减少旧货进池（防「旧闻当新收」）
 
 [[sources]]
 name = "Reddit r/espresso"
@@ -121,7 +121,7 @@ url = "https://www.reddit.com/r/espresso/top/.rss?t=week"   # 改取 top 流，�
 category_hint = "community"          # 降级为社区补充，每期最多 2 条
 lang = "en"
 enabled = true
-lookback_days = 7                    # top 周榜，放宽回看窗口
+lookback_days = 3                     # 2026-08-06 由 7 收紧：周榜近 3 天已覆盖热帖，减少旧帖进池
 max_per_source = 2
 include_any = ["espresso", "machine", "grinder", "dial", "dose", "yield", "flow", "channel", "pressure", "temp", "pid", "mod", "build", "setup", "recipe", "extraction", "puck", "shot", "shots", "barista", "lever", "e61", "portafilter", "scale", "wdt", "distribution", "preinfusion", "steam", "milk", "grind", "burr", "9 bar", "9bar", "profiles", "profiling"]
 exclude_any = ["just got", "finally got", "new setup", "first machine", "help me choose", "recommend me", "rate my", "show off", "my new", "bought", "should i buy", "looking for a", "what should i", "pick between", "gift for"]

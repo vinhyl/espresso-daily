@@ -122,17 +122,58 @@ CONTENT_TYPE_TO_KIND = {
 # 刻意**不用「来源分数 × 系数」**：那种做法会让权威但无关的内容自动高分
 # （例：Barista Hustle 发一篇滤泡文章也被抬到 80+）。这里来源身份只经由
 # 「证据质量」这一维参与打分，另外只影响配额与同分排序。
+#
+# 2026-08-06 重构：六维满分**按 content_type 差异化**（CONTENT_TYPE_DIM_PROFILES），
+# 每种内容类型的维度权重反映「这类内容的实际价值点」；总分恒为 100，min_score 语义不变。
+# SCORE_DIMS 仅保留维度顺序与中文标签（落盘/展示用），满分以类型表为准。
 # ---------------------------------------------------------------------------
-SCORE_DIMS: tuple[tuple[str, str, int], ...] = (
-    ("relevance",     "意式相关性", 30),
-    ("novelty",       "新颖性",     20),
-    ("actionability", "可操作性",   20),
-    ("evidence",      "证据质量",   15),
-    ("params",        "参数具体度", 10),
-    ("timeliness",    "时效性",      5),
+SCORE_DIMS: tuple[tuple[str, str], ...] = (
+    ("relevance",     "意式相关性"),
+    ("novelty",       "新颖性"),
+    ("actionability", "可操作性"),
+    ("evidence",      "证据质量"),
+    ("params",        "参数具体度"),
+    ("timeliness",    "内容有效时间"),   # 2026-08-06 重定义：非「新鲜度」，是内容信息有效期的长度
 )
-DIM_MAX: dict[str, int] = {k: m for k, _, m in SCORE_DIMS}
-DIM_LABELS: dict[str, str] = {k: label for k, label, _ in SCORE_DIMS}
+DIM_KEYS: tuple[str, ...] = tuple(k for k, _ in SCORE_DIMS)
+DIM_LABELS: dict[str, str] = {k: label for k, label in SCORE_DIMS}
+
+# 各 content_type 的六维满分配置（每行总和 = 100）。
+# timeliness = 内容有效时间：原理性/长期恒定有效的内容分值更高（与「新闻新鲜度」相反）。
+CONTENT_TYPE_DIM_PROFILES: dict[str, dict[str, int]] = {
+    # 行业消息：时效价值大（novelty/timeliness 权重高）；可操作性改为「信息对读者的实用价值」，
+    # 不再按操作步骤卡分；参数非必需。
+    "news": {"relevance": 30, "novelty": 25, "actionability": 10,
+             "evidence": 15, "params": 5, "timeliness": 15},
+    # 官方公告：规格参数是核心价值
+    "announcement": {"relevance": 25, "novelty": 25, "actionability": 5,
+                     "evidence": 15, "params": 20, "timeliness": 10},
+    # 专家实验/建模：方法+数据最重要，且常青（有效时间长）
+    "expert_experiment": {"relevance": 25, "novelty": 15, "actionability": 10,
+                          "evidence": 20, "params": 15, "timeliness": 15},
+    # 学术研究：证据质量权重最高、最常青；可操作性不要求
+    "research": {"relevance": 20, "novelty": 20, "actionability": 5,
+                 "evidence": 25, "params": 15, "timeliness": 15},
+    # 独立评测：价值=可照做+参数；评测参考期较长
+    "independent_review": {"relevance": 25, "novelty": 10, "actionability": 20,
+                           "evidence": 15, "params": 20, "timeliness": 10},
+    # 社区个案：evidence 天生低（单人经验）不卡死；参数/可操作性才是价值；故障排查常青
+    "community_case": {"relevance": 25, "novelty": 10, "actionability": 20,
+                       "evidence": 5, "params": 25, "timeliness": 15},
+}
+
+# 兜底：未匹配类型的维度满分（取 news 配置，避免 KeyError）
+DEFAULT_DIM_PROFILE: dict[str, int] = CONTENT_TYPE_DIM_PROFILES["news"]
+
+
+def dim_profile(content_type: str) -> dict[str, int]:
+    """返回某 content_type 的六维满分配置；未知类型回退默认。"""
+    return CONTENT_TYPE_DIM_PROFILES.get(content_type, DEFAULT_DIM_PROFILE)
+
+
+def dim_max(content_type: str, key: str) -> int:
+    """某类型某维的满分。"""
+    return dim_profile(content_type).get(key, 0)
 
 # 证据等级（用于同分排序：证据等级 > 来源多样性 > 事件是否重复）
 EVIDENCE_RANK = {
@@ -152,11 +193,13 @@ def _norm_content_type(t: str, hint: str = "") -> str:
     return HINT_TO_CONTENT_TYPE.get((hint or "").strip().lower(), "news")
 
 
-def _norm_dims(raw: dict | None) -> dict[str, int]:
-    """把 LLM 返回的六维分数裁剪到合法区间；缺失维度取该维一半分（中性）。"""
+def _norm_dims(raw: dict | None, content_type: str = "") -> dict[str, int]:
+    """把 LLM 返回的六维分数按该类型的满分裁剪到合法区间；缺失维度取该维一半分（中性）。"""
     raw = raw if isinstance(raw, dict) else {}
+    profile = dim_profile(content_type)
     dims: dict[str, int] = {}
-    for key, _label, maxv in SCORE_DIMS:
+    for key in DIM_KEYS:
+        maxv = profile.get(key, 0)
         v = raw.get(key)
         if isinstance(v, bool) or not isinstance(v, (int, float)):
             try:
@@ -168,12 +211,12 @@ def _norm_dims(raw: dict | None) -> dict[str, int]:
 
 
 def dims_total(dims: dict[str, int]) -> int:
-    return sum(dims.get(k, 0) for k, _, _ in SCORE_DIMS)
+    return sum(dims.get(k, 0) for k in DIM_KEYS)
 
 
 def format_dims(dims: dict[str, int]) -> str:
     """紧凑单行表示，落 frontmatter：relevance=28|novelty=16|..."""
-    return "|".join(f"{k}={dims.get(k, 0)}" for k, _, _ in SCORE_DIMS)
+    return "|".join(f"{k}={dims.get(k, 0)}" for k in DIM_KEYS)
 
 
 def parse_dims(s: str) -> dict[str, int]:
@@ -309,6 +352,22 @@ PRESCREEN_REJECT_PATTERNS = [
     "健康", "养生", "减肥", "抗氧化", "致癌", "喝几杯", "每天几杯",
 ]
 
+# 手冲/滤泡等其他冲煮方式的强信号词（2026-08-06 新增）
+# 用途：① 注入 LLM 初筛 prompt，帮助模型识别「其他冲煮方式」形态；② 规则初筛命中即拒。
+# 只收「强手冲信号」词——意式语境几乎不会出现的词；刻意**避开** brew ratio / 粉水比
+# 这类意式与手冲共用的两用词（正是 Brew Ratio Bloat 漏网的原因）。
+POUROVER_BREW_KEYWORDS = [
+    # 器具 / 方式（英文）
+    "pour over", "pour-over", "pourover", "v60", "chemex", "kalita", "aeropress",
+    "french press", "cold brew", "drip coffee", "filter coffee",
+    "gooseneck", "immersion brew", "batch brew",
+    # 器具 / 方式（中文）
+    "手冲", "滤泡", "滤纸", "滤杯", "法压", "冷萃", "冰滴", "爱乐压", "挂耳",
+    "细口壶", "分享壶", "闷蒸", "bloom",
+    # 冲煮赛事 / 场景（赛事必然非意式，强信号）
+    "brewers cup", "wbrc", "world brewers cup", "冲煮赛", "滤泡赛",
+]
+
 # 新颖性信号
 NOVELTY_KEYWORDS = [
     "launch", "release", "released", "introduc", "unveil", "announce", "new ",
@@ -369,6 +428,10 @@ def _rule_prescreen(item: dict, hint: str) -> dict:
         if pat in text:
             return {"accept": False, "content_type": ctype, "espresso_core": espresso_core,
                     "reason": f"命中排除形态「{pat.strip()}」（纯展示/求助/广告/健康话题）"}
+    for pat in POUROVER_BREW_KEYWORDS:
+        if pat in text:
+            return {"accept": False, "content_type": ctype, "espresso_core": espresso_core,
+                    "reason": f"命中手冲/滤泡信号「{pat.strip()}」，非意式冲煮方式"}
     # 未命中排除形态：放行至评分；espresso_core 仅作质量报告信息字段
     reason = (f"命中意式核心词 {len(hits)} 个：{', '.join(hits[:4])}"
               if hits else "源级预过滤已通过，放行至六维评分")
@@ -404,6 +467,10 @@ def _llm_prescreen(cfg: dict, item: dict, hint: str) -> dict | None:
         "或意式社区含具体机型+参数+已尝试步骤的可复用讨论。\n\n"
         "【形态检查：命中以下任一明显形态才拒绝（accept=false）】\n"
         "1. 其他冲煮方式专题：手冲/滤泡/法压/冷萃/冰滴/爱乐压等非意式器具与流程。\n"
+        "   手冲强信号词供参考（命中多个或语境明显为手冲时优先判拒）：\n"
+        f"   {', '.join(POUROVER_BREW_KEYWORDS)}\n"
+        "   **注意**：即使来源是技术源（如 Barista Hustle）、或内容含 brew ratio/粉水比等"
+        "意式也用的两用词，只要语境是冲煮赛/滤泡器具/手冲流程 → 一律拒绝。\n"
         "2. 泛咖啡健康/营养研究：研究主体是「咖啡」整体的健康效应（每天几杯、抗氧化、肝病、"
         "心血管等），结论不涉及意式萃取或奶咖操作。注意：研究主体是 espresso / moka pot 等"
         "意式饮品本身的 → 放行。\n"
@@ -599,15 +666,20 @@ def _days_since(item: dict) -> int:
 
 
 def _rule_dims(item: dict, hint: str, content_type: str) -> dict[str, int]:
-    """启发式六维打分。来源身份只经「证据质量」一维参与，不做全局乘法加权。"""
+    """启发式六维打分。来源身份只经「证据质量」一维参与，不做全局乘法加权。
+
+    2026-08-06 重构：各维按该 content_type 的满分（CONTENT_TYPE_DIM_PROFILES）裁剪；
+    timeliness 按「内容有效时间」启发式——类型基线（研究/实验类常青高、新闻/公告类短命低）
+    + 原理性信号词加成。
+    """
     text = _text_of(item)
     title = (item.get("title") or "").lower()
+    profile = dim_profile(content_type)
+    mx = lambda k: profile.get(k, 0)  # noqa: E731
 
     hits = _core_hits(text)
     title_hits = _core_hits(title)
-    # 意式相关性 30：按核心词命中密度阶梯给分（标题命中额外加权，说明是主题而非顺带提及）。
-    # 不用「全中才满分」：概念性长文（通篇讲意式但用词少）不该被压过低，
-    # 泛内容也靠不住堆词虚高——阶梯上限 + 标题加权已足够区分。
+    # 意式相关性：按核心词命中密度阶梯给分（标题命中额外加权，说明是主题而非顺带提及）。
     if len(hits) >= 4:
         relevance = 30
     elif len(hits) >= 2:
@@ -616,23 +688,36 @@ def _rule_dims(item: dict, hint: str, content_type: str) -> dict[str, int]:
         relevance = 16
     else:
         relevance = 6
-    relevance = min(30, relevance + min(6, len(title_hits) * 3))
+    relevance = min(mx("relevance"), relevance + min(6, len(title_hits) * 3))
 
-    novelty = min(20, RULE_NEUTRAL_BASELINE["novelty"]
+    novelty = min(mx("novelty"), RULE_NEUTRAL_BASELINE["novelty"]
                   + sum(4 for k in NOVELTY_KEYWORDS if k in text))
-    actionability = min(20, RULE_NEUTRAL_BASELINE["actionability"]
+    actionability = min(mx("actionability"), RULE_NEUTRAL_BASELINE["actionability"]
                         + sum(4 for k in ACTION_KEYWORDS if k in text))
 
-    # 证据质量 15：由内容性质（来源身份的体现）决定基准
-    evidence = {
+    # 证据质量：由内容性质（来源身份的体现）决定基准，再按类型满分裁剪
+    evidence = min(mx("evidence"), {
         "research": 13, "expert_experiment": 11, "independent_review": 10,
         "announcement": 8, "news": 7, "community_case": 5,
-    }.get(content_type, 6)
+    }.get(content_type, 6))
 
-    params = min(10, len(PARAM_PATTERN.findall(text)) * 2)
+    params = min(mx("params"), len(PARAM_PATTERN.findall(text)) * 2)
 
-    age = _days_since(item)
-    timeliness = 5 if age <= 1 else 4 if age <= 3 else 3 if age <= 7 else 2 if age <= 14 else 1
+    # 内容有效时间（非新鲜度）：类型基线 + 原理性信号词加成
+    #   研究/专家实验：原理性内容长期有效 → 基线高分
+    #   新闻/公告：行业动态/新品短命 → 基线低分
+    #   社区个案/评测：故障排查与长期评测参考期长 → 中分基线
+    _evergreen_baseline = {
+        "research": 0.85, "expert_experiment": 0.85, "independent_review": 0.65,
+        "community_case": 0.65, "news": 0.45, "announcement": 0.35,
+    }.get(content_type, 0.5)
+    _evergreen_signal = any(k in text for k in (
+        "study", "research", "experiment", "physics", "principle", "theory",
+        "model", "methodology", "mechanism", "原理", "机制", "方法论", "建模",
+    ))
+    if _evergreen_signal:
+        _evergreen_baseline = min(1.0, _evergreen_baseline + 0.2)
+    timeliness = max(0, min(mx("timeliness"), int(round(mx("timeliness") * _evergreen_baseline))))
 
     return {
         "relevance": relevance, "novelty": novelty, "actionability": actionability,
@@ -701,22 +786,39 @@ def _chat_json(api_key: str, base: str, model: str, temperature: float, prompt: 
         return None
 
 
-def _dim_rubric() -> str:
-    """六维评分标准（写进 prompt，保证可解释、可复现）。"""
+def _dim_rubric(content_type: str = "") -> str:
+    """六维评分标准（写进 prompt，保证可解释、可复现）。
+
+    2026-08-06 重构：各维**满分按 content_type 差异化**（见 CONTENT_TYPE_DIM_PROFILES），
+    每种内容类型只对该类型的价值点给满权重；总分恒为 100，min_score 语义不变。
+    timeliness 重定义为「内容有效时间」——信息有效期越长分值越高（与新闻新鲜度相反）。
+    """
+    profile = dim_profile(content_type)
+    mx = lambda k: profile.get(k, 0)  # noqa: E731
     return (
-        "【六维评分标准】总分 = 六维之和（满分 100）。每一维都要独立判断，不要凭「来源有名」整体拔高。\n"
-        "1. relevance 意式相关性（0-30）：是否直接服务于意式浓缩的萃取/器具/参数/工艺。\n"
-        "   28-30 = 通篇围绕意式核心；15-22 = 意式占一部分；5-12 = 泛咖啡内容顺带提及；0-4 = 基本无关。\n"
-        "2. novelty 新颖性（0-20）：是否提供了新信息/新发现/反常识结论。\n"
-        "   17-20 = 颠覆或修正既有共识；10-16 = 有新数据或新产品实质信息；3-9 = 常见内容复述；0-2 = 老生常谈。\n"
-        "3. actionability 可操作性（0-20）：读者能否据此改变自己的操作。\n"
-        "   17-20 = 给出可直接照做的步骤/参数；10-16 = 有明确方向但需自行试；3-9 = 仅启发；0-2 = 纯资讯无可操作性。\n"
-        "4. evidence 证据质量（0-15）：**这是来源身份唯一参与打分的地方**。\n"
-        "   13-15 = 同行评审论文/可复现实验（有方法、样本、数据）；10-12 = 专家实验或独立实测（有测量数据）；\n"
-        "   7-9 = 有出处的行业报道或厂商规格；4-6 = 单人经验/社区个案但过程具体；0-3 = 无据断言、营销话术。\n"
-        "5. params 参数具体度（0-10）：是否给出具体数值（粉量、液重、时间、压力、温度、粒径、TDS 等）。\n"
-        "   9-10 = 完整配方或成套实验参数；5-8 = 有部分关键数值；1-4 = 零星提及；0 = 全无数值。\n"
-        "6. timeliness 时效性（0-5）：信息新鲜度与讨论热度，5 = 当日重要事件，1 = 陈旧内容。\n"
+        f"【六维评分标准】本条内容性质 = {content_type or '未判定'}，"
+        "总分 = 六维之和（满分 100，各维满分随内容性质不同）。每一维都要独立判断，"
+        "不要凭「来源有名」整体拔高。各维满分如下：\n"
+        f"1. relevance 意式相关性（0-{mx('relevance')}）：是否直接服务于意式浓缩的萃取/器具/参数/工艺。\n"
+        f"   满分档 = 通篇围绕意式核心；中档 = 意式占一部分；低档 = 泛咖啡内容顺带提及；近 0 = 基本无关。\n"
+        f"2. novelty 新颖性（0-{mx('novelty')}）：是否提供了新信息/新发现/反常识结论。\n"
+        f"   高分 = 颠覆共识/新数据/新产品实质信息；中分 = 有内容但非首创；低分 = 常见复述。\n"
+        f"3. actionability 可操作性/实用价值（0-{mx('actionability')}）：读者能否据此改变操作或决策。\n"
+        f"   对操作类（评测/实验/社区个案）：高分 = 给出可直接照做的步骤/参数；中分 = 有方向需自行试；低分 = 仅启发。\n"
+        f"   对资讯类（news/announcement）：改为评「信息对读者的实用/决策价值」——行业动态/新品信息本身即有价值，"
+        f"不要因「无法操作」给 0-2 分。\n"
+        f"4. evidence 证据质量（0-{mx('evidence')}）：**这是来源身份唯一参与打分的地方**。\n"
+        f"   满分档 = 同行评审论文/可复现实验；中高档 = 专家实验/独立实测/有出处的行业报道；\n"
+        f"   中低档 = 厂商规格/社区个案但过程具体；低分 = 无据断言、营销话术。\n"
+        f"   **注意**：社区个案(community_case)的 evidence 满分本就低（5 分），不要因「不是权威来源」再额外压分。\n"
+        f"5. params 参数具体度（0-{mx('params')}）：是否给出具体数值（粉量、液重、时间、压力、温度、粒径、TDS 等）。\n"
+        f"   高分 = 完整配方或成套实验参数；中分 = 有部分关键数值；低分 = 零星提及；0 = 全无数值。"
+        f"   按材料中**可见**信息打分：材料里写了参数就给分，没写则给 0——与是否抓到全文无关。\n"
+        f"6. timeliness 内容有效时间（0-{mx('timeliness')}）：**信息有效期的长度**，不是发布新鲜度。\n"
+        f"   满分档 = 原理性/长期恒定有效（萃取物理、标准配方逻辑、通用调参方法论）；\n"
+        f"   中高分 = 数年有效（成熟机型长期评测、行业基础共识）；\n"
+        f"   中低分 = 数月有效（当季新品、短期行业趋势）；\n"
+        f"   低分 = 一次性/即时新闻（单日事件、价格变动、临时活动）。\n"
         "【分档参考】85+ 罕见强证据；70-84 日报主内容；60-69 确有补充价值才收；60 以下不发布。\n"
         "务必拉开区分度：多数条目应落在 55-80，不要集中打 70-75。\n"
     )
@@ -737,18 +839,17 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> 
     if full_text:
         body_label = "正文（原文全文，已抓取）"
         body = full_text[:9000]
-        body_note = (
-            "以下是**原文全文**，请严格基于它写摘要与打分，"
-            "不要引入原文没有的参数或结论。\n"
-        )
     else:
         body_label = "正文/摘要（RSS 截断摘要，可能不完整）"
         body = item.get("summary", "")
-        body_note = (
-            "⚠️ 以下仅为 **RSS 截断摘要**，可能不完整。"
-            "严禁脑补原文没写的数据、参数或结论；信息不足时如实写「原文未展开」，"
-            "并相应压低 params 与 evidence 两维的分数。\n"
-        )
+
+    # 统一评分指令：不再按有无全文区分——评分完全交给下方 rubric 的六维定义，
+    # 此处只约束「禁止虚构」。params/evidence 按材料中可见信息如实打分，
+    # 不被「是否抓到全文」这一采集状态影响。
+    body_note = (
+        "请严格基于上方材料如实打分，严禁虚构材料未提到的数据、参数或结论；"
+        "信息不足时如实写「原文未展开」。\n"
+    )
 
     prompt = (
         "你是意式浓缩咖啡资讯的资深编辑。面对一条新闻/资讯，先判断它的「处理方式」(kind)，再输出评估。\n\n"
@@ -772,7 +873,7 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> 
         "2. 返回 2-5 个标签，可中可英，尽量精炼（一个标签通常 2-6 个字/词）。\n"
         "3. 标签应反映内容真正讲的知识点/器具/人群，而不是泛泛而谈。\n\n"
         f"【来源分类提示（仅供参考，不要直接当标签）】{hint}\n\n"
-        + _dim_rubric() + "\n"
+        + _dim_rubric(content_type) + "\n"
         f"【来源】{item.get('source','')}　【内容性质（初筛判定）】{content_type or '未判定'}\n"
         f"标题：{item.get('title','')}\n"
         f"{body_note}"
@@ -809,7 +910,7 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> 
         tags = [DEFAULT_FALLBACK_TAG]
     ctype = _norm_content_type(str(data.get("content_type", "")), hint) if data.get("content_type") \
         else (content_type or HINT_TO_CONTENT_TYPE.get(hint, "news"))
-    dims = _norm_dims(data.get("scores"))
+    dims = _norm_dims(data.get("scores"), ctype)
     kind = data.get("kind")
     return Judgment(
         tags=tags,
