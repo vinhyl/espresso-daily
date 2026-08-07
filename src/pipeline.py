@@ -286,8 +286,7 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
             n_rule_engine += 1
         _dims = j.dims or {}
         _ft = "全文" if it.get("full_text") else "摘要"
-        _d = " | ".join(f"{k}={_dims.get(k, 0)}" for k in ("relevance", "novelty", "actionability",
-                                                          "evidence", "params", "timeliness"))
+        _d = " | ".join(f"{k}={_dims.get(k, 0)}" for k in score_mod.dim_keys(j.content_type))
         if j.score < min_score:
             print(f"[pipeline] 精评拒 [{j.score}分<{min_score} | {_ft} | {_d}] "
                   f"{it.get('source','')}：{it['title'][:60]}")

@@ -38,6 +38,7 @@ class QualityReport:
         self.dedup_skipped = 0                 # 因已收录（source_url/title）跳过
         self.cluster_folds = 0                 # 事件聚类折叠掉的条数
         self.fetch_failures: list[dict] = []
+        self.content_type_scores: dict[str, list[int]] = {}  # content_type → [scores]
 
     # ---- 累积 ----
     def record_candidate(self, it: dict, espresso_core: bool) -> None:
@@ -78,6 +79,9 @@ class QualityReport:
             self.count_85plus += 1
         if j.kind == "deepdive" and j.deepdive:
             self.count_deepdive += 1
+        # 按 content_type 聚合分数（暴露某类型平均分异常）
+        ctype = getattr(j, "content_type", "") or "unknown"
+        self.content_type_scores.setdefault(ctype, []).append(j.score)
 
     # ---- 合并抓取失败维度 ----
     def merge_failures(self, failures: list[dict] | None = None) -> None:
@@ -137,6 +141,13 @@ class QualityReport:
                 "dedup_skipped": self.dedup_skipped,
                 "cluster_folds": self.cluster_folds,
             },
+            "by_content_type": {
+                ct: {
+                    "count": len(scores),
+                    "score_avg": round(sum(scores) / len(scores), 2) if scores else 0,
+                }
+                for ct, scores in sorted(self.content_type_scores.items())
+            },
             "source_ratio": src_ratio,
             "per_source": {
                 name: {
@@ -185,6 +196,15 @@ class QualityReport:
             lines.append("")
             for name, r in sorted(d["source_ratio"].items(), key=lambda x: -x[1]):
                 lines.append(f"- {name}：{r*100:.1f}%")
+            lines.append("")
+        if d.get("by_content_type"):
+            lines.append("## 按内容类型分布（入选）")
+            lines.append("")
+            lines.append("| 内容类型 | 条数 | 平均分 |")
+            lines.append("| --- | ---: | ---: |")
+            for ct, info in d["by_content_type"].items():
+                label = score_mod.CONTENT_TYPE_LABELS.get(ct, ct)
+                lines.append(f"| {label} | {info['count']} | {info['score_avg']} |")
             lines.append("")
         lines.append("## 每源明细")
         lines.append("")
