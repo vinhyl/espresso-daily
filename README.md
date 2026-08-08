@@ -78,8 +78,8 @@
 src/
   content_loader.py   解析 content/*.md（frontmatter + Markdown）→ 结构化条目
   build.py            静态站生成器（Jinja2）→ public/（含动态标签页）
-  fetch.py            抓取 RSS / 搜索接口 / 学术源；按需全文抓取；源级关键词预筛；抓取失败结构化记录
-  score.py            初筛 prescreen + 六维可解释评分 + 内容性质(content_type) + 48h 事件聚类 + 动态标签 + 分级(kind) + 深度解读
+  fetch.py            抓取 RSS / 搜索接口（B站/知乎/smzdm）/ 知乎官方 CLI（type=zhihu_cli）/ 学术源；按需全文抓取；源级关键词预筛；抓取失败结构化记录
+  score.py            初筛 prescreen + 六维可解释评分（中英文独立维度表 CONTENT_TYPE_DIM_PROFILES / _ZH）+ 内容性质(content_type) + 48h 事件聚类 + 动态标签 + 分级(kind) + 深度解读
   knowledge.py        基础/常青知识库加载与背景上下文拼接（私有，不参与建站）
   pipeline.py         串联 fetch → 初筛 → 全文 → 六维精评 → 去重 → 聚类 → 配额 → 写 content → build → 质量报告落盘
   academic.py         每周学术雷达：抓论文 → 建研究卡 → 知识库补丁提案 → 周报 + 抽检清单（独立周级 CI）
@@ -93,7 +93,8 @@ public/               构建产物（Cloudflare Pages 输出目录）
 reports/              运行时产物（质量报告、抓取失败清单、抽检清单；gitignore，不提交）
 scripts/new_day.py    新建一日空白模板
 scripts/new_knowledge.py  新建一个常青主题模板
-config.example.toml   配置示例（信息源 / LLM / 标签 / 知识库 / 学术源）
+config.example.toml   配置示例（信息源 / LLM / 标签 / 知识库 / 学术源；英文流，CI 使用）
+config.zh.toml        本地中文源专用配置（B站直连 + 知乎 CLI；gitignore，不入库，按需本地跑）
 .github/workflows/    每日定时管线（daily.yml）+ 每周学术雷达（weekly.yml）
 ```
 
@@ -137,7 +138,26 @@ python -m src.pipeline --dry-run         # 只预览将收录的内容（不写 
 **C. 定时自动化（推荐）**
 `.github/workflows/daily.yml` 每天 **00:40 (UTC+8)**（cron `40 16 * * *` UTC）运行管线并提交 `content/` 与 `public/`，推送即触发部署。在仓库 Secrets 配置 `ESPRESSO_LLM_API_KEY` 即可启用 LLM（workflow 通过环境变量 `ESPRESSO_LLM_ENABLED=true` 强制开启，无需改 config；未配置 key 时自动回退规则评分）。
 
-**D. 每周学术雷达（独立周级 CI）**
+**D. 中英双流架构（2026-08-08 定型）**
+
+中文源（B站直连搜索 / 知乎官方 CLI）与英文源（RSS 图文）**抓取、评分彻底分离**，互不干扰、不重复操作：
+
+| 流 | 配置 | 运行方式 | 评分维度表 |
+|---|---|---|---|
+| **英文流** | `config.example.toml`（8 RSS 源） | CI 每日 00:40 自动跑（见 C） | `CONTENT_TYPE_DIM_PROFILES` |
+| **中文流** | `config.zh.toml`（B站直连 + 知乎 CLI，**gitignore 本地专用**） | 按需本地跑，push 后与 CI 合并 | `CONTENT_TYPE_DIM_PROFILES_ZH`（独立表） |
+
+```bash
+# 中文流：本地按需跑（只抓中文源，约 1 分钟）
+python -m src.pipeline --config config.zh.toml --date 2026-08-08
+git add content public && git commit && git push   # 与 CI 英文流续号去重合并
+```
+
+- **合并机制**：`_next_entry_numbers` 续号写入（不覆盖已有文件）+ `_existing_keys` 去重（不重复收录），本地/CI 谁先跑都安全。
+- **评分分离**：`score.py` 按 `item['lang']` 选择维度表（`zh` → 中文专用表），当前标准与英文一致、结构独立，后续可单独调优中文维度权重 / `min_score_zh` 而不影响英文流。
+- **抓取层约束**：中文搜索类源（B站/知乎）按相关度排序易回旧文——适配器解析真实发布日期（`pubdate`/`EditTime`）并按 `lookback_days` 过滤；纯视频无图文（摘要过短）在初筛硬拒。
+
+**E. 每周学术雷达（独立周级 CI）**
 ```bash
 python -m src.academic                  # 抓 OpenAlex+Crossref → 建研究卡 → 补丁提案 → 周报 + 抽检清单（写 research/、knowledge/patches/、reports/）
 python -m src.academic --date 2026-08-04   # 指定运行日期
@@ -253,6 +273,7 @@ related: ["标题|https://...", "..."]   # 同题事件折叠的补充来源（4
 - **分档**：85+ 罕见强证据 · 70–84 日报主内容 · 60–69 确有补充价值才收 · **<60 不发布**（`llm.min_score = 60` 硬门槛，各类型满分均为 100，语义不变）。
 - **同分排序**：证据等级 > 来源多样性 > 事件是否重复（不单看总分）。
 - LLM 启用时基于**全文**精评（初筛通过后才抓全文，见下）；未启用时同样输出六维明细（规则启发式，`_rule_dims` 按类型满分裁剪 + 有效时间启发式），字段一致。六维明细落 `score_dims` 到 frontmatter，`why_read` 一句「为什么值得读」同步落盘（卡片展示用）。
+- **中英文评分分离**（2026-08-08）：`score.py` 按 `item['lang']` 选择维度表——英文走 `CONTENT_TYPE_DIM_PROFILES`，中文走独立的 `CONTENT_TYPE_DIM_PROFILES_ZH`（当前标准与英文一致、结构独立）。中文流（B站/知乎）后续可单独调优维度权重或新增 `min_score_zh`，不影响英文流。详见「每日更新机制 → D. 中英双流架构」。
 
 ### 3. 按需全文抓取（稀缺资源）
 

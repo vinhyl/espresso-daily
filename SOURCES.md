@@ -14,6 +14,17 @@
 > - 标签处于**观察期**：`[ui].show_tags = false`，标签页与标签 chips 不在 UI 展示（机制保留，
 >   待实测观察标签生成质量后再决定是否开启；**勿擅自开启**）。本清单中的标签设计原则是长期目标，非当前 UI 状态。
 >
+> **2026-08-08 重大更新（中英双流架构）**：
+> - **英文流**：`config.example.toml`（8 RSS 源）→ CI 每日 00:40 自动跑。经健康盘点停用 3 个失效源
+>   （Sprudge 403 / Coffee Ad Astra 停更 / Whole Latte Love 停更），接入 Scott Rao、Decent Espresso 补技术档。
+> - **中文流**：`config.zh.toml`（gitignore 本地专用）→ 按需本地跑 → push 与 CI 合并（续号去重）。
+>   中文源现状：B站直连搜索（主力）、知乎官方 CLI（已接入）；豆瓣 RSSHub 路由会打崩进程已停用、
+>   RSSHub 服务已停。
+> - **评分分离**：`score.py` 按 `item['lang']` 选择维度表（中文 `CONTENT_TYPE_DIM_PROFILES_ZH` 独立表，
+>   标准暂与英文一致，后续分别调优）。
+> - **搜索类源约束**：B站/知乎按相关度排序易回旧文——适配器解析真实发布日期 + lookback 过滤；
+>   纯视频无图文（摘要过短）初筛硬拒。
+>
 > 验证状态图例：✅ 手测可用（demo 期单次验证） · ⚠️ 需特殊处理 · ❓ 待验证
 
 ---
@@ -104,7 +115,7 @@ LLM 评估**之前**执行，避免把无关内容送进稀缺的 LLM/算力。�
 
 ## 非 RSS 源接入操作指南（具体怎么操作）
 
-非 RSS 源有落地路径，**中文源优先用知乎官方 CLI 与直连搜索适配器**（无需 RSSHub）；RSSHub 仅用于豆瓣小组等无 API 站点。
+非 RSS 源有落地路径，**中文源优先用知乎官方 CLI 与直连搜索适配器**（无需 RSSHub）；RSSHub 已停用（豆瓣路由会打崩进程，详见「路径 1」）。
 
 ### 路径 0：知乎官方 CLI（2026-08-08 新增，首选知乎方案）
 
@@ -127,16 +138,20 @@ echo -n "<secret>" | "<CLI 绝对路径>" auth set --secret-stdin    # 写入 ma
 ```
 
 - **邀测免费额度**（2026-08-08 官方文档）：知乎搜索 5,000 次/天、全网搜索 5,000/天、热榜 100/天、直答 100/天；同账号 20 个 Secret 共享额度池。日报日常约 3-5 次搜索/天，额度充裕。
+- **限流注意**（2026-08-08 实测）：邀测期短时多次调用会触发 `rate limit exceeded`（Code 30001），恢复窗口较长；日常一天一次没问题，**勿反复测试**。
 - 本机已装：CLI v0.2.0（darwin-arm64），路径 `~/Library/Application Support/zhihu-cli/current/zhihu-cli`，Access Secret 已验证有效。
-- 接入管线：搜索结果 JSON → 归一化为 `content/` 条目（复用 B站直连的手动补充路径：本地跑 → git push → CI 续号去重不冲突）。
+- 接入管线：`fetch.py` 内置 `fetch_zhihu_cli()`（`type=zhihu_cli`），query 支持 `||` 分隔多词；按 `EditTime` 截日 + lookback 过滤旧文（知乎搜索按相关度排序易回旧文）。本地跑 `python -m src.pipeline --config config.zh.toml` → push → CI 续号去重合并。
 
-### 路径 1：自托管 RSSHub（最省心，推荐）
+### 路径 1：自托管 RSSHub（⚠️ 2026-08-08 起停用）
+
+> **停用原因**：① 豆瓣小组路由实测会**打崩 RSSHub 进程**（请求后进程静默死亡/502，且小组近 3 天常 0 条）；② 知乎/B站均已走更优路径（官方 CLI / 直连搜索），RSSHub 仅剩豆瓣单一用途。本机 RSSHub 服务已停（`~/rsshub` 保留，Node 直跑非 docker）。如豆瓣路由修复或需接入 smzdm/小红书等 cookie 源，再恢复本路径。
 
 把所有无 RSS 的站点先转成 RSS，再在 `config.toml` 里按 `type="rss"` 接入。
 
 ```bash
-# 1) 启动 RSSHub（Docker，一行命令）
-docker run -d --name rsshub -p 1200:1200 diygod/rsshub
+# 1) 启动 RSSHub（Node 直跑，本机无 docker；或 Docker 一行命令）
+cd ~/rsshub && npm start          # 监听 1200（需先 npm install + npm run build）
+# docker 方式：docker run -d --name rsshub -p 1200:1200 diygod/rsshub
 
 # 2) 在 config.toml 里把下面条目的 enabled 改为 true，并把 127.0.0.1:1200 换成你的地址
 [[sources]]
@@ -178,7 +193,7 @@ lang = "zh"
 enabled = true
 ```
 
-> 注意：知乎/B站 有反爬（本机实测直连会被拦），稳定性不如 RSSHub。新增站点只需在
+> 注意（2026-08-08 更新）：**B站直连搜索已验证稳定可用**（20 条/次）；知乎直连被反爬（400），改用**官方 CLI**（见「路径 0」）。新增站点只需在
 > `fetch.py` 的 `SEARCH_PARSERS` 里加一个解析函数即可，结构统一。
 
 ### 路径 3：人工精选（`type="manual"`）

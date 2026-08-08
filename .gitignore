@@ -1,7 +1,8 @@
 # 环境与密钥（绝不提交）
 .env
 config.toml
-config.zh.toml   # 本地中文源专用配置（含 127.0.0.1 本地服务地址，不入库；如需共享改 config.example.toml）
+# 本地中文源专用配置（含 127.0.0.1 本地服务地址，不入库；如需共享改 config.example.toml）
+config.zh.toml
 
 # 工作区本地数据（工作记忆/备份，不提交公开仓库）
 .workbuddy/
