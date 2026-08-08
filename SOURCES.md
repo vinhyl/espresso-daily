@@ -27,6 +27,8 @@
 | A3 | **Daily Coffee News** | `https://dailycoffeenews.com/feed/` | 行业商业新闻、新品、市场 | ✅ 手测；**强化意式过滤**（industry，仅设备/浓缩/奶咖自动化/商用工作流，关键词过滤） |
 | A4 | **Barista Hustle** | `https://www.baristahustle.com/feed/`（`/blog/feed/` 实测 403，已改根路径） | 专业技术、萃取科学、培训、配方 | ✅ 已修复并启用（tech_experiment，差异化技术源） |
 | A5 | **Coffee Ad Astra** | `https://coffeeadastra.com/feed/` | 专家实验与建模（Espresso/Extraction/Physics） | ✅ 新增；**2026-08-08 起停用**（252 天无更新，近停更；待恢复更新再启用） |
+| A5b | **Scott Rao** | `https://www.scottrao.com/blog?format=rss` | 萃取实验/建模权威（Squarespace 标准 RSS） | ✅ **2026-08-08 接入**（实测可用，最新 08-07；tech_experiment，补 AdAstra 停用空缺） |
+| A5c | **Decent Espresso** | `https://fast.decentespresso.com/blog/decent_espresso_blog_en.rss` | prosumer 设备 + 冲煮曲线 + 软件更新（官网显式 RSS） | ✅ **2026-08-08 接入**（实测可用，最新 05-19；tech_experiment） |
 | A6 | **CoffeeGeek** | `https://coffeegeek.com/feed/` | 独立设备评测 | ✅ 新增（independent_review，每期≤1） |
 | A7 | **Whole Latte Love** | `https://www.wholelattelove.com/blogs/tech-tips.atom` | 品牌教程/评测 | ✅ 新增；**2026-08-08 起停用**（142 天无更新，已停更；待恢复更新再启用） |
 | A8 | **Clive Coffee** | `https://www.clivecoffee.com/blogs/learn.atom` | 品牌教程/评测 | ✅ 新增（tutorial，与 WLL 合计每期≤1） |
@@ -43,7 +45,7 @@
 
 | 层级（category_hint） | 含来源 | 每期上限 |
 |---|---|---|
-| `tech_experiment`（技术实验） | Barista Hustle（Coffee Ad Astra 已停用） | 2 |
+| `tech_experiment`（技术实验） | Barista Hustle、Scott Rao、Decent Espresso（Coffee Ad Astra 已停用） | 2（3 源共享） |
 | `independent_review`（独立测试） | CoffeeGeek | 1 |
 | `tutorial`（专业教程） | Clive Coffee（Whole Latte Love 已停用） | 1（单源即满，`quota_group=gear_tutorials` 保留） |
 | `industry`（行业媒体） | Daily Coffee News、Perfect Daily Grind（Sprudge 已停用） | 2 |

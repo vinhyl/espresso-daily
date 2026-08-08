@@ -30,10 +30,10 @@ from src import quality_report as quality_mod  # noqa: E402
 # 与 [llm].max_per_day（硬上限，默认 12）共同约束最终收录量。
 # ---------------------------------------------------------------------------
 LAYER_QUOTA = {
-    "tech_experiment": 2,    # Barista Hustle / Coffee Ad Astra
+    "tech_experiment": 2,    # Barista Hustle / Scott Rao / Decent Espresso（3 源共享每期 2 条）
     "independent_review": 1, # CoffeeGeek
-    "tutorial": 1,           # Whole Latte Love / Clive（两源再受 quota_group 合计 1 约束）
-    "industry": 2,           # Daily Coffee News / Perfect Daily Grind / Sprudge
+    "tutorial": 1,           # Clive Coffee（quota_group=gear_tutorials 合计 1；WLL 已停用）
+    "industry": 2,           # Daily Coffee News / Perfect Daily Grind（Sprudge 已停用）
     "community": 2,          # Reddit r/espresso
     "official": 999,         # 官方公告（事件触发，不硬限）
 }

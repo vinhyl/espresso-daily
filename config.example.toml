@@ -138,6 +138,29 @@ full_text = true                    # 全文白名单：初筛通过后抓原文
 include_any = ["espresso", "extraction", "physics", "pressure", "flow", "channel", "grind", "puck", "percolation", "profiling", "tds", "dial", "brew", "temperature", "water", "dose"]
 exclude_any = ["pourover", "pour over", "v60", "aeropress", "french press", "cold brew"]
 
+# ---- 2026-08-08 新增：补强 tech_experiment 档（Ad Astra 停用后技术档空缺）----
+[[sources]]
+name = "Scott Rao"
+type = "rss"
+url = "https://www.scottrao.com/blog?format=rss"   # Squarespace 标准 RSS；2026-08-08 实测可用，最新 08-07
+category_hint = "tech_experiment"   # 萃取实验/建模权威（《Espresso Extraction》作者），技术档最高优先级
+lang = "en"
+enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文
+include_any = ["espresso", "extraction", "grind", "crema", "channel", "pressure", "flow", "profile", "dose", "ratio", "puck", "preinfusion", "tds", "water"]
+exclude_any = ["roast", "roasting", "pour over", "pourover", "v60", "aeropress", "french press", "cold brew", "filter"]
+
+[[sources]]
+name = "Decent Espresso"
+type = "rss"
+url = "https://fast.decentespresso.com/blog/decent_espresso_blog_en.rss"   # 官网显式 RSS；2026-08-08 实测可用，最新 05-19
+category_hint = "tech_experiment"   # prosumer 设备 + 冲煮曲线 + 软件更新，贴合技术实验定位
+lang = "en"
+enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓原文正文
+include_any = ["espresso", "profile", "extraction", "pressure", "flow", "machine", "software", "update", "bengle", "de1", "recipe", "temperature", "shot", "steam", "portafilter"]
+exclude_any = ["pour over", "pourover", "v60", "cold brew", "tea", "decaf"]
+
 [[sources]]
 name = "CoffeeGeek"
 type = "rss"
