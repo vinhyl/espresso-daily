@@ -89,20 +89,46 @@ LLM 评估**之前**执行，避免把无关内容送进稀缺的 LLM/算力。�
 
 ## D. 中文源（**重点：非 RSS 怎么接**）
 
+> **2026-08-08 重大更新**：知乎官方发布 **zhihu-cli**（开放平台命令行工具），以 Access Secret 认证，含知乎搜索/全网搜索/热榜/直答能力，**已在本机安装并验证可用**（详见下方「路径 0：知乎官方 CLI」）。知乎中文源首选官方 CLI，不再依赖 RSSHub/反爬对抗。
+
 | # | 名称 | 覆盖内容 | 推荐接入方式 |
 |---|------|----------|--------------|
-| D1 | **咖啡沙龙** | 中文权威社区、深度科普与评测 | RSSHub（`/coffeesalon/...`，如有社区路由）或人工精选 |
-| D2 | **什么值得买 · 咖啡** | 器具购买经验、性价比评测 | RSSHub 的 `/smzdm/keyword/咖啡` 路由，或人工精选 |
-| D3 | **知乎**「咖啡 / 意式浓缩」 | 深度科普、原理讲解 | **RSSHub** `/zhihu/search/意式浓缩` 或 `type=search`(parser=zhihu) |
-| D4 | **豆瓣** 咖啡小组 | 生活化分享、器具交流 | **RSSHub** `/douban/group/<小组id>` |
-| D5 | **B站** 咖啡 UP 主 | 视频教程、器具开箱 | **RSSHub** `/bilibili/search/all/意式浓缩咖啡` 或 `type=search`(parser=bilibili) |
-| D6 | **小红书** | 图文教程、开箱 | 反爬严格，建议人工精选（或 RSSHub 社区路由） |
+| D1 | **咖啡沙龙** | 中文权威社区、深度科普与评测 | 人工精选（或 RSSHub 社区路由） |
+| D2 | **什么值得买 · 咖啡** | 器具购买经验、性价比评测 | 项目内置 `smzdm` 搜索适配器（`type=search` + `parser=smzdm`），或人工精选 |
+| D3 | **知乎**「咖啡 / 意式浓缩」 | 深度科普、原理讲解 | ✅ **知乎官方 CLI**（`zhihu-cli search zhihu --query "意式浓缩"`，2026-08-08 已接入） |
+| D4 | **豆瓣** 咖啡小组 | 生活化分享、器具交流 | **RSSHub** `/douban/group/717430`（咖啡宇宙小组，本机 npm 直跑） |
+| D5 | **B站** 咖啡 UP 主 | 视频教程、器具开箱 | ✅ **直连搜索适配器**（`type=search` + `parser=bilibili`，2026-08-08 实测 20 条/次） |
+| D6 | **小红书** | 图文教程、开箱 | 反爬严格，建议人工精选 |
 
 ---
 
 ## 非 RSS 源接入操作指南（具体怎么操作）
 
-非 RSS 源有三条落地路径，**推荐优先用 RSSHub**（把一切归一化成 RSS，管线上只需一套 `rss` 逻辑）。
+非 RSS 源有落地路径，**中文源优先用知乎官方 CLI 与直连搜索适配器**（无需 RSSHub）；RSSHub 仅用于豆瓣小组等无 API 站点。
+
+### 路径 0：知乎官方 CLI（2026-08-08 新增，首选知乎方案）
+
+知乎开放平台发布官方命令行工具 `zhihu-cli`（Skill 包 + 二进制），以 **Access Secret** 认证（非 cookie），无反爬问题。
+
+```bash
+# 1) 获取官方 Skill 包（含安装脚本与全部文档）
+#    https://developer-cdn.zhihu.com/zhihu-cli/releases/stable/skill/zhihu-cli-skill.zip
+#    （或到 https://developer.zhihu.com/docs?key=zhihu_cli 下载；文档中心需登录）
+
+# 2) 安装 CLI（官方 manifest 下载二进制到 ~/Library/Application Support/zhihu-cli/current/）
+bash <skill-dir>/scripts/setup.sh        # 或 status 检查：bash <skill-dir>/scripts/run.sh status
+
+# 3) 申请并配置 Access Secret（https://developer.zhihu.com/profile → 申请新 Access Secret）
+echo -n "<secret>" | "<CLI 绝对路径>" auth set --secret-stdin    # 写入 macOS 钥匙串，勿贴进对话
+
+# 4) 验证 + 搜索
+"<CLI>" auth status --verify
+"<CLI>" search zhihu --query "意式浓缩" --count 10 --pretty      # JSON 输出：Title/AuthorName/ContentText/Url
+```
+
+- **邀测免费额度**（2026-08-08 官方文档）：知乎搜索 5,000 次/天、全网搜索 5,000/天、热榜 100/天、直答 100/天；同账号 20 个 Secret 共享额度池。日报日常约 3-5 次搜索/天，额度充裕。
+- 本机已装：CLI v0.2.0（darwin-arm64），路径 `~/Library/Application Support/zhihu-cli/current/zhihu-cli`，Access Secret 已验证有效。
+- 接入管线：搜索结果 JSON → 归一化为 `content/` 条目（复用 B站直连的手动补充路径：本地跑 → git push → CI 续号去重不冲突）。
 
 ### 路径 1：自托管 RSSHub（最省心，推荐）
 
