@@ -181,23 +181,52 @@ DIM_LABELS: dict[str, str] = {
 # relevance 否决阈值：relevance 分 < 满分 × 此比例 → 直接判死
 RELEVANCE_VETO_RATIO = 0.5
 
+# ---------------------------------------------------------------------------
+# 中文源专用维度配置（2026-08-08：评分流程按语言彻底分离）
+# 中文流（B站/知乎等搜索源）与英文流（RSS 图文源）各自独立评分：
+# - 当前标准与英文一致（结构与流程已分离，行为不变）；
+# - 后续可单独调优中文维度权重 / min_score，不影响英文流。
+# 抓取层分离见 config.zh.toml（本地按需跑）vs config.example.toml（CI 每日跑）。
+# ---------------------------------------------------------------------------
+CONTENT_TYPE_DIM_PROFILES_ZH: dict[str, dict[str, int]] = {
+    ctype: dict(profile) for ctype, profile in CONTENT_TYPE_DIM_PROFILES.items()
+}
+DEFAULT_DIM_PROFILE_ZH: dict[str, int] = CONTENT_TYPE_DIM_PROFILES_ZH["news"]
+
+
+def _dim_profiles(lang: str | None) -> dict[str, dict[str, int]]:
+    """按语言选择维度配置表：zh 走中文专用表，其余走英文表。"""
+    if (lang or "").strip().lower() == "zh":
+        return CONTENT_TYPE_DIM_PROFILES_ZH
+    return CONTENT_TYPE_DIM_PROFILES
+
+
+def _default_dim_profile(lang: str | None) -> dict[str, int]:
+    if (lang or "").strip().lower() == "zh":
+        return DEFAULT_DIM_PROFILE_ZH
+    return DEFAULT_DIM_PROFILE
+
+
 # 兜底：未匹配类型的维度满分（取 news 配置，避免 KeyError）
 DEFAULT_DIM_PROFILE: dict[str, int] = CONTENT_TYPE_DIM_PROFILES["news"]
 
 
-def dim_profile(content_type: str) -> dict[str, int]:
-    """返回某 content_type 的维度满分配置；未知类型回退默认。"""
-    return CONTENT_TYPE_DIM_PROFILES.get(content_type, DEFAULT_DIM_PROFILE)
+def dim_profile(content_type: str, lang: str | None = None) -> dict[str, int]:
+    """返回某 content_type 的维度满分配置；未知类型回退默认。
+
+    lang 用于中英文评分分离：zh 走 CONTENT_TYPE_DIM_PROFILES_ZH。
+    """
+    return _dim_profiles(lang).get(content_type, _default_dim_profile(lang))
 
 
-def dim_keys(content_type: str) -> tuple[str, ...]:
+def dim_keys(content_type: str, lang: str | None = None) -> tuple[str, ...]:
     """返回某 content_type 的维度键顺序（落盘/展示/LLM 输出格式用）。"""
-    return tuple(dim_profile(content_type).keys())
+    return tuple(dim_profile(content_type, lang).keys())
 
 
-def dim_max(content_type: str, key: str) -> int:
+def dim_max(content_type: str, key: str, lang: str | None = None) -> int:
     """某类型某维的满分。"""
-    return dim_profile(content_type).get(key, 0)
+    return dim_profile(content_type, lang).get(key, 0)
 
 # 证据等级（用于同分排序：证据等级 > 来源多样性 > 事件是否重复）
 EVIDENCE_RANK = {
@@ -217,10 +246,10 @@ def _norm_content_type(t: str, hint: str = "") -> str:
     return HINT_TO_CONTENT_TYPE.get((hint or "").strip().lower(), "news")
 
 
-def _norm_dims(raw: dict | None, content_type: str = "") -> dict[str, int]:
+def _norm_dims(raw: dict | None, content_type: str = "", lang: str | None = None) -> dict[str, int]:
     """把 LLM 返回的分数按该 content_type 的维度集裁剪到合法区间；缺失维度取该维一半分（中性）。"""
     raw = raw if isinstance(raw, dict) else {}
-    profile = dim_profile(content_type)
+    profile = dim_profile(content_type, lang)
     dims: dict[str, int] = {}
     for key in profile:  # 仅按该类型的维度键遍历，不引入其他类型的键
         maxv = profile[key]
@@ -239,13 +268,13 @@ def dims_total(dims: dict[str, int]) -> int:
     return sum(int(v) for v in (dims or {}).values())
 
 
-def format_dims(dims: dict[str, int], content_type: str = "") -> str:
+def format_dims(dims: dict[str, int], content_type: str = "", lang: str | None = None) -> str:
     """紧凑单行表示，落 frontmatter：relevance=25|timeliness=18|...
 
     content_type 决定输出键的顺序与集合；不传则按 dims 自身键序（兼容旧内容）。
     """
     if content_type:
-        keys = dim_keys(content_type)
+        keys = dim_keys(content_type, lang)
     else:
         keys = tuple((dims or {}).keys())
     return "|".join(f"{k}={int(dims.get(k, 0))}" for k in keys)
@@ -297,6 +326,7 @@ class Judgment:
     related: list = None             # 同题事件折叠的补充来源 [(title, url), ...]
     prescreen_reason: str = ""       # 初筛判定理由（仅进质量报告，不落 frontmatter）
     used_full_text: bool = False     # 是否基于全文精评（质量报告用）
+    lang: str = ""                   # 条目语言（zh/其他）：决定用英文还是中文评分维度表
 
     @property
     def evidence_rank(self) -> int:
@@ -317,7 +347,7 @@ class Judgment:
             f"content_type: {self.content_type}",
         ]
         if self.dims:
-            lines.append(f"score_dims: {format_dims(self.dims, self.content_type)}")
+            lines.append(f"score_dims: {format_dims(self.dims, self.content_type, self.lang)}")
         if self.why_read:
             lines.append(f"why_read: {_one_line(self.why_read, 120)}")
         if item.get("source"):
@@ -803,7 +833,7 @@ def _days_since(item: dict) -> int:
     return max(0, (date.today() - d).days)
 
 
-def _rule_dims(item: dict, hint: str, content_type: str) -> dict[str, int]:
+def _rule_dims(item: dict, hint: str, content_type: str, lang: str | None = None) -> dict[str, int]:
     """启发式打分：按 content_type 的维度集逐维给分。
 
     2026-08-06 v2 重构：
@@ -815,7 +845,7 @@ def _rule_dims(item: dict, hint: str, content_type: str) -> dict[str, int]:
     """
     text = _text_of(item)
     title = (item.get("title") or "").lower()
-    profile = dim_profile(content_type)
+    profile = dim_profile(content_type, lang)
 
     hits = _core_hits(text)
     title_hits = _core_hits(title)
@@ -871,7 +901,7 @@ def _rule_dims(item: dict, hint: str, content_type: str) -> dict[str, int]:
     return dims
 
 
-def _fallback(item: dict, hint: str, content_type: str = "") -> Judgment:
+def _fallback(item: dict, hint: str, content_type: str = "", lang: str | None = None) -> Judgment:
     text = " ".join([
         item.get("title", ""),
         item.get("summary", ""), " ".join(item.get("tags", [])),
@@ -885,14 +915,14 @@ def _fallback(item: dict, hint: str, content_type: str = "") -> Judgment:
     # 规则回退容易命中过多关键词，限制最多 5 个，保持标签云清爽
     tags = sorted(tags)[:5]
     ctype = content_type or HINT_TO_CONTENT_TYPE.get(hint, "news")
-    dims = _rule_dims(item, hint, ctype)
+    dims = _rule_dims(item, hint, ctype, lang)
     summary = item.get("summary") or item.get("title", "")
     # 无 LLM 时无法做翻译/摘要/深度整理，kind 固定 summary（正文取抓取摘要），
     # deepdive 留空（前端不渲染该区块）
     return Judgment(
         tags=tags, summary=summary, score=dims_total(dims), kind="summary",
         deepdive="", references=None, content_type=ctype, dims=dims,
-        why_read="", related=None,
+        why_read="", related=None, lang=lang or "",
     )
 
 
@@ -932,7 +962,7 @@ def _chat_json(api_key: str, base: str, model: str, temperature: float, prompt: 
         return None
 
 
-def _dim_rubric(content_type: str = "") -> str:
+def _dim_rubric(content_type: str = "", lang: str | None = None) -> str:
     """评分标准（写进 prompt，保证可解释、可复现）。
 
     2026-08-06 v2 重构：
@@ -946,7 +976,7 @@ def _dim_rubric(content_type: str = "") -> str:
     if/elif 保证每个分支只在 ctype 匹配时求值，访问的 profile 键一定存在。
     """
     ctype = content_type or "news"
-    profile = dim_profile(ctype)
+    profile = dim_profile(ctype, lang)
     rv = int(profile["relevance"] * RELEVANCE_VETO_RATIO)
 
     if ctype == "expert_experiment":
@@ -1032,7 +1062,8 @@ def _dim_rubric(content_type: str = "") -> str:
     )
 
 
-def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> Judgment | None:
+def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "",
+                   lang: str | None = None) -> Judgment | None:
     """Two-Pass 第二段：精评。输出 title / tags / summary / kind / 六维分 / why_read。
 
     若 item 带 `full_text`（初筛通过后按需抓取所得），优先基于全文精评——
@@ -1059,10 +1090,11 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> 
         "信息不足时如实写「原文未展开」。\n"
     )
 
-    # 按 content_type 动态生成 scores 键提示与 JSON 模板（维度集差异化）
+    # 按 content_type 动态生成 scores 键提示与 JSON 模板（维度集差异化；按语言选维度表）
     _ctype_for_prompt = content_type or "news"
-    _scores_keys = "/".join(dim_keys(_ctype_for_prompt))
-    _scores_template = ",".join(f'"{k}":0' for k in dim_keys(_ctype_for_prompt))
+    _lang_for_prompt = (item.get("lang") or "").strip() or None
+    _scores_keys = "/".join(dim_keys(_ctype_for_prompt, _lang_for_prompt))
+    _scores_template = ",".join(f'"{k}":0' for k in dim_keys(_ctype_for_prompt, _lang_for_prompt))
 
     prompt = (
         "你是意式浓缩咖啡资讯的资深编辑。面对一条新闻/资讯，先判断它的「处理方式」(kind)，再输出评估。\n\n"
@@ -1086,7 +1118,7 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> 
         "2. 返回 2-5 个标签，可中可英，尽量精炼（一个标签通常 2-6 个字/词）。\n"
         "3. 标签应反映内容真正讲的知识点/器具/人群，而不是泛泛而谈。\n\n"
         f"【来源分类提示（仅供参考，不要直接当标签）】{hint}\n\n"
-        + _dim_rubric(content_type) + "\n"
+        + _dim_rubric(content_type, _lang_for_prompt) + "\n"
         f"【来源】{item.get('source','')}　【内容性质（初筛判定）】{content_type or '未判定'}\n"
         f"标题：{item.get('title','')}\n"
         f"{body_note}"
@@ -1123,7 +1155,7 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> 
         tags = [DEFAULT_FALLBACK_TAG]
     ctype = _norm_content_type(str(data.get("content_type", "")), hint) if data.get("content_type") \
         else (content_type or HINT_TO_CONTENT_TYPE.get(hint, "news"))
-    dims = _norm_dims(data.get("scores"), ctype)
+    dims = _norm_dims(data.get("scores"), ctype, lang)
     kind = data.get("kind")
     return Judgment(
         tags=tags,
@@ -1138,6 +1170,7 @@ def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "") -> 
         dims=dims,
         why_read=_one_line(data.get("why_read", ""), 120),
         used_full_text=bool(full_text),
+        lang=lang or "",
     )
 
 
@@ -1191,7 +1224,7 @@ def _relevance_vetoed(j: Judgment) -> bool:
     """
     if not j.dims or "relevance" not in j.dims:
         return False
-    maxv = dim_max(j.content_type, "relevance")
+    maxv = dim_max(j.content_type, "relevance", getattr(j, "lang", None) or None)
     if maxv <= 0:
         return False
     return j.dims["relevance"] < maxv * RELEVANCE_VETO_RATIO
@@ -1208,10 +1241,13 @@ def judge(item: dict, cfg: dict, hint: str = "mixed", knowledge_ctx: str = "",
     - `content_type` 由初筛（prescreen）传入，LLM 可在精评时修正。
     - relevance 一票否决：精评后检查 relevance 是否 < 满分 50%，是则 score=0
       （由 pipeline 的 min_score 门槛自然拦截，不单独走 reject 路径）。
+    - `lang`：按条目语言选择评分维度表（zh 走 CONTENT_TYPE_DIM_PROFILES_ZH，
+      中英文评分流程与标准彻底分离，见 dim_profile）。
     """
+    lang = (item.get("lang") or "").strip() or None
     llm = cfg.get("llm", {})
     if llm.get("enabled"):
-        j = _call_llm_meta(cfg, item, hint, content_type=content_type)
+        j = _call_llm_meta(cfg, item, hint, content_type=content_type, lang=lang)
         if j is not None:
             if (
                 j.kind == "deepdive"
@@ -1225,10 +1261,10 @@ def judge(item: dict, cfg: dict, hint: str = "mixed", knowledge_ctx: str = "",
                     print("[score] 深度解读生成失败，降级为仅摘要")
             if _relevance_vetoed(j):
                 print(f"[score] relevance 否决（{j.dims.get('relevance', 0)}/"
-                      f"{dim_max(j.content_type, 'relevance')}）：{item.get('title', '')[:50]}")
+                      f"{dim_max(j.content_type, 'relevance', lang)}）：{item.get('title', '')[:50]}")
                 j.score = 0
             return j
-    j = _fallback(item, hint, content_type)
+    j = _fallback(item, hint, content_type, lang)
     if _relevance_vetoed(j):
         print(f"[score] relevance 否决（规则回退）：{item.get('title', '')[:50]}")
         j.score = 0
