@@ -79,7 +79,7 @@ LLM 评估**之前**执行，避免把无关内容送进稀缺的 LLM/算力。�
 
 ### 全文抓取白名单（`full_text`）
 
-白名单来源（A3 Daily Coffee News、A4 Barista Hustle、A6 CoffeeGeek、A8 Clive Coffee；A5 Coffee Ad Astra / A7 Whole Latte Love 已停用，配置保留）在 config 里标了 `full_text = true`。管线仅在**初筛 `accept` 之后**才对这些源抓原文全文做精评——全文是稀缺资源（有流量与封禁成本），避免基于截断 RSS 摘要虚构参数与结论。成本闸门见 `config.example.toml` 的 `[fetch].fulltext_*`（每运最大篇数 / 间隔 / 超时）。详见 README「编辑判断管线 → 按需全文抓取」。
+白名单来源（A3 Daily Coffee News、A4 Barista Hustle、A6 CoffeeGeek、A8 Clive Coffee、A9 Scott Rao、A10 Decent Espresso；A5 Coffee Ad Astra / A7 Whole Latte Love 已停用，配置保留）在 config 里标了 `full_text = true`。管线仅在**初筛 `accept` 之后**才对这些源抓原文全文做精评——全文是稀缺资源（有流量与封禁成本），避免基于截断 RSS 摘要虚构参数与结论。成本闸门见 `config.example.toml` 的 `[fetch].fulltext_*`（每运最大篇数 / 间隔 / 超时）。详见 README「编辑判断管线 → 按需全文抓取」。
 
 ## B. 社区 / 论坛
 
@@ -107,7 +107,7 @@ LLM 评估**之前**执行，避免把无关内容送进稀缺的 LLM/算力。�
 | D1 | **咖啡沙龙** | 中文权威社区、深度科普与评测 | 人工精选（或 RSSHub 社区路由） |
 | D2 | **什么值得买 · 咖啡** | 器具购买经验、性价比评测 | 项目内置 `smzdm` 搜索适配器（`type=search` + `parser=smzdm`），或人工精选 |
 | D3 | **知乎**「咖啡 / 意式浓缩」 | 深度科普、原理讲解 | ✅ **知乎官方 CLI**（`zhihu-cli search zhihu --query "意式浓缩"`，2026-08-08 已接入） |
-| D4 | **豆瓣** 咖啡小组 | 生活化分享、器具交流 | **RSSHub** `/douban/group/717430`（咖啡宇宙小组，本机 npm 直跑） |
+| D4 | **豆瓣** 咖啡小组 | 生活化分享、器具交流 | ~~RSSHub `/douban/group/717430`~~ ❌ **2026-08-08 起停用**（路由会打崩 RSSHub 进程） |
 | D5 | **B站** 咖啡 UP 主 | 视频教程、器具开箱 | ✅ **直连搜索适配器**（`type=search` + `parser=bilibili`，2026-08-08 实测 20 条/次） |
 | D6 | **小红书** | 图文教程、开箱 | 反爬严格，建议人工精选 |
 

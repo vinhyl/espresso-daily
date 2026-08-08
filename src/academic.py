@@ -16,7 +16,7 @@
 
 知识库补丁机制（对接验收「知识库补丁可触发」）：
   - 每条研究卡产出一个补丁提案 JSON（含建议并入的知识库主题 kb_topic）；
-  - `python -m src.academic apply --patch knowledge/patches/xxx.json` 可触发应用：
+  - `python -m src.academic apply knowledge/patches/xxx.json` 可触发应用：
     若 knowledge/<topic>.md 已存在则追加「## 补充（日期）」段，否则新建综合条目。
 """
 from __future__ import annotations

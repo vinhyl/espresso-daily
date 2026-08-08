@@ -191,15 +191,15 @@ python -m src.academic apply knowledge/patches/2026-08-04-xxx.json   # 应用一
 ```markdown
 ---
 date: 2026-08-05
-title: 标题
-source: 来源名（可选）
-source_url: https://（可选）
 tags: 9bar, 水温, 萃取率tds, 意式基础   # 2-5 个具体主题标签，逗号分隔
-score: 85                             # 0-100 质量分（管线落盘；手写可选）
+title: 标题
+score: 85                             # 0-100 质量分 = 各维之和（管线落盘；手写可选）
 kind: deepdive                        # 内容处理方式：as-is/translate/summary/deepdive（管线落盘）
-content_type: research               # 内容性质（管线落盘）：expert_experiment / independent_review / news / community_case / announcement / research
-score_dims: relevance=22|info_density=28|industry_impact=20|timeliness=12  # 维度明细（键集按 content_type 差异化，管线落盘）
+content_type: community_case          # 内容性质（管线落盘）：expert_experiment / independent_review / news / community_case / announcement / research
+score_dims: relevance=25|param_specificity=30|solution=20|reproducibility=10  # 维度明细（键集按 content_type 差异化，管线落盘）
 why_read: 一句话说明为什么值得读        # 「为什么值得读」短句（管线落盘，可选）
+source: Reddit r/espresso             # 来源名（可选）
+source_url: https://...               # 原文链接（可选）
 related: ["标题|https://...", "..."]   # 同题事件折叠的补充来源（48h 聚类产出；可选，不动 references）
 ---
 
@@ -246,7 +246,7 @@ related: ["标题|https://...", "..."]   # 同题事件折叠的补充来源（4
 
 只看 **标题 + RSS 摘要 + 来源身份**，便宜地淘汰不值得后续成本的内容：
 
-- **程序化硬拒**（`_hard_reject_check`，零成本、不依赖 LLM）：命中 `PRESCREEN_REJECT_PATTERNS`（手冲/滤泡/法压/冷萃/爱乐压等非意式冲煮、纯展示帖、求助选购帖）或 `POUROVER_BREW_KEYWORDS` 即直接拒，**覆盖 LLM 的放行**。
+- **程序化硬拒**（`_hard_reject_check`，零成本、不依赖 LLM）：命中 `PRESCREEN_REJECT_PATTERNS`（纯展示帖/求助选购帖等低质英文短语）或 `POUROVER_BREW_KEYWORDS`（手冲/滤泡/法压/冷萃/爱乐压等非意式冲煮方式）即直接拒，**覆盖 LLM 的放行**。
   - 健康话题例外：研究主体是 espresso/moka pot 等意式饮品本身时放行（如「意式浓缩降低肝病风险」），泛咖啡健康研究仍拒。
 - **LLM 初筛**：`_llm_prescreen` 输出 `{accept, content_type, espresso_core, reason}`。判定哲学：
   - **先判意式相关**（命中任一即放行）：① 意式操作/技术直接相关（萃取参数/器具/工艺/奶咖）；② 意式生态/行业相关（设备新品、商用动态、咖啡师赛事、意式饮品研究）；③ 明确为意式服务（意式用豆烘焙、含机型+参数的可复用讨论）。
