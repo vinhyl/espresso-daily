@@ -133,7 +133,7 @@ type = "rss"
 url = "https://coffeeadastra.com/feed/"
 category_hint = "tech_experiment"   # 专家实验与建模，须二次过滤仅取 Espresso/Extraction/Physics
 lang = "en"
-enabled = true
+enabled = false   # 2026-08-08 实测：252 天无更新（近停更），每期静默 0 候选；待恢复更新再启用
 full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 include_any = ["espresso", "extraction", "physics", "pressure", "flow", "channel", "grind", "puck", "percolation", "profiling", "tds", "dial", "brew", "temperature", "water", "dose"]
 exclude_any = ["pourover", "pour over", "v60", "aeropress", "french press", "cold brew"]
@@ -145,6 +145,8 @@ url = "https://coffeegeek.com/feed/"
 category_hint = "independent_review"   # 独立设备评测，每期最多 1 条
 lang = "en"
 enabled = true
+# 2026-08-08 决策：保持默认 lookback_days（全局 3），不加源级放宽——低频源只是更新节奏慢，
+# 一有新文（日期落在窗口内）即正常进池；放宽窗口才会引入旧文回流，勿改。
 full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 max_per_source = 1
 include_any = ["espresso", "grinder", "portafilter", "espresso machine", "milk", "steam", "brew", "review", "coffee", "machine"]
@@ -156,7 +158,7 @@ type = "rss"
 url = "https://www.wholelattelove.com/blogs/tech-tips.atom"
 category_hint = "tutorial"          # 品牌教程，与 Clive 合计每期最多 1 条
 lang = "en"
-enabled = true
+enabled = false   # 2026-08-08 实测：142 天无更新（已停更），每期静默 0 候选；待恢复更新再启用
 full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 quota_group = "gear_tutorials"
 max_per_group = 1

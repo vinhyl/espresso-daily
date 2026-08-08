@@ -26,9 +26,9 @@
 | A2 | **Perfect Daily Grind** | `https://perfectdailygrind.com/feed/` | 全产业链：产地、烘焙、行业、冲煮、espresso 专题 | ✅ 手测；**降为补充源**（industry，仅收豆种/烘焙/供应链变化，关键词过滤） |
 | A3 | **Daily Coffee News** | `https://dailycoffeenews.com/feed/` | 行业商业新闻、新品、市场 | ✅ 手测；**强化意式过滤**（industry，仅设备/浓缩/奶咖自动化/商用工作流，关键词过滤） |
 | A4 | **Barista Hustle** | `https://www.baristahustle.com/feed/`（`/blog/feed/` 实测 403，已改根路径） | 专业技术、萃取科学、培训、配方 | ✅ 已修复并启用（tech_experiment，差异化技术源） |
-| A5 | **Coffee Ad Astra** | `https://coffeeadastra.com/feed/` | 专家实验与建模（Espresso/Extraction/Physics） | ✅ 新增（tech_experiment，须关键词二次过滤，剔除纯滤泡内容） |
+| A5 | **Coffee Ad Astra** | `https://coffeeadastra.com/feed/` | 专家实验与建模（Espresso/Extraction/Physics） | ✅ 新增；**2026-08-08 起停用**（252 天无更新，近停更；待恢复更新再启用） |
 | A6 | **CoffeeGeek** | `https://coffeegeek.com/feed/` | 独立设备评测 | ✅ 新增（independent_review，每期≤1） |
-| A7 | **Whole Latte Love** | `https://www.wholelattelove.com/blogs/tech-tips.atom` | 品牌教程/评测 | ✅ 新增（tutorial，与 Clive 合计每期≤1） |
+| A7 | **Whole Latte Love** | `https://www.wholelattelove.com/blogs/tech-tips.atom` | 品牌教程/评测 | ✅ 新增；**2026-08-08 起停用**（142 天无更新，已停更；待恢复更新再启用） |
 | A8 | **Clive Coffee** | `https://www.clivecoffee.com/blogs/learn.atom` | 品牌教程/评测 | ✅ 新增（tutorial，与 WLL 合计每期≤1） |
 | A9–A15 | Coffee Review / European Coffee Trip / Coffeeness / Bean Ground / Jimseven 等 | 站点 `/feed` | 评测、教程、百科 | ❓ 待逐个验证 RSS（候选扩充） |
 
@@ -43,9 +43,9 @@
 
 | 层级（category_hint） | 含来源 | 每期上限 |
 |---|---|---|
-| `tech_experiment`（技术实验） | Barista Hustle、Coffee Ad Astra | 2 |
+| `tech_experiment`（技术实验） | Barista Hustle（Coffee Ad Astra 已停用） | 2 |
 | `independent_review`（独立测试） | CoffeeGeek | 1 |
-| `tutorial`（专业教程） | Whole Latte Love、Clive Coffee | 1（两源合计，靠 `quota_group=gear_tutorials` 约束） |
+| `tutorial`（专业教程） | Clive Coffee（Whole Latte Love 已停用） | 1（单源即满，`quota_group=gear_tutorials` 保留） |
 | `industry`（行业媒体） | Daily Coffee News、Perfect Daily Grind、Sprudge | 2 |
 | `community`（社区） | Reddit r/espresso | 2 |
 | `official`（官方公告） | （暂无专源，事件触发） | 不硬限 |
@@ -61,7 +61,7 @@ LLM 评估**之前**执行，避免把无关内容送进稀缺的 LLM/算力。�
 
 ### 全文抓取白名单（`full_text`）
 
-白名单来源（A4 Barista Hustle、A5 Coffee Ad Astra、A6 CoffeeGeek、A3 Daily Coffee News、A7 Whole Latte Love、A8 Clive Coffee）在 config 里标了 `full_text = true`。管线仅在**初筛 `accept` 之后**才对这些源抓原文全文做精评——全文是稀缺资源（有流量与封禁成本），避免基于截断 RSS 摘要虚构参数与结论。成本闸门见 `config.example.toml` 的 `[fetch].fulltext_*`（每运最大篇数 / 间隔 / 超时）。详见 README「编辑判断管线 → 按需全文抓取」。
+白名单来源（A3 Daily Coffee News、A4 Barista Hustle、A6 CoffeeGeek、A8 Clive Coffee；A5 Coffee Ad Astra / A7 Whole Latte Love 已停用，配置保留）在 config 里标了 `full_text = true`。管线仅在**初筛 `accept` 之后**才对这些源抓原文全文做精评——全文是稀缺资源（有流量与封禁成本），避免基于截断 RSS 摘要虚构参数与结论。成本闸门见 `config.example.toml` 的 `[fetch].fulltext_*`（每运最大篇数 / 间隔 / 超时）。详见 README「编辑判断管线 → 按需全文抓取」。
 
 ## B. 社区 / 论坛
 
