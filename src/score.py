@@ -127,7 +127,7 @@ CONTENT_TYPE_TO_KIND = {
 # 5. 去掉 evergreen（太抽象，LLM 评不准）；timeliness 保留但降权（10-15 分）
 # 6. 总分仍 = 各维之和 = 100，min_score=60 语义不变
 #
-# 旧六维 frontmatter 仍可被 parse_dims 解析（不强校验 key），向后兼容。
+# 旧 frontmatter（六维/其他键集）仍可被 parse_dims 解析（不强校验 key），向后兼容。
 # ---------------------------------------------------------------------------
 CONTENT_TYPE_DIM_PROFILES: dict[str, dict[str, int]] = {
     # 专家实验/建模：结论价值是核心，数据具体度次之，可操作性兜底
@@ -281,7 +281,7 @@ def format_dims(dims: dict[str, int], content_type: str = "", lang: str | None =
 
 
 def parse_dims(s: str) -> dict[str, int]:
-    """format_dims 的逆操作（质量报告/模板读取用）。不强校验 key，向后兼容旧六维。"""
+    """format_dims 的逆操作（质量报告/模板读取用）。不强校验 key，向后兼容旧版键集。"""
     out: dict[str, int] = {}
     for part in (s or "").split("|"):
         if "=" not in part:
@@ -321,7 +321,7 @@ class Judgment:
     references: list = None  # 深度解读引用的权威源：[(title, url), ...]，仅深度解读使用
     # ---- 阶段二新增 ----
     content_type: str = "news"       # 内容性质（见 CONTENT_TYPES）
-    dims: dict = None                # 六维明细 {relevance: 28, ...}
+    dims: dict = None                # 维度明细 {relevance: 22, ...}（键集按 content_type + lang 差异化，见 CONTENT_TYPE_DIM_PROFILES / _ZH）
     why_read: str = ""               # 「为什么值得读」一句话
     related: list = None             # 同题事件折叠的补充来源 [(title, url), ...]
     prescreen_reason: str = ""       # 初筛判定理由（仅进质量报告，不落 frontmatter）
@@ -500,12 +500,12 @@ def _rule_prescreen(item: dict, hint: str) -> dict:
     """无 LLM 时的初筛回退。
 
     设计取舍：规则回退**只挡明显非意式 / 低质形态**（纯展示、求助选购、广告、
-    咖啡健康营养话题），其余一律放行到六维评分阶段，由 min_score 门槛决定去留。
+    咖啡健康营养话题），其余一律放行到精评阶段，由 min_score 门槛决定去留。
     不在这里自行做「是否意式核心」的硬判定——因为：
       1) 源级关键词预过滤（fetch 层 include_any）已经把泛咖啡内容挡在门外，
          能走到初筛的条目基本是意式相关源里筛过的；
-      2) 真正的水/泛内容（咖啡渣周边、每天几杯咖啡研究）即便放行，六维评分也会
-         因 relevance→0 / evidence 低而跌破 60（已单测验证），不必在初筛重复拦截；
+      2) 真正的水/泛内容（咖啡渣周边、每天几杯咖啡研究）即便放行，精评也会
+         因 relevance 否决（<满分50%）直接判死，不必在初筛重复拦截；
       3) 若初筛也卡核心词，无 LLM 时日报会直接空掉，违背「宁缺毋滥但要有内容」。
     带 LLM 时走 _llm_prescreen，做更准的语义初筛。
     """
@@ -527,7 +527,7 @@ def _rule_prescreen(item: dict, hint: str) -> dict:
                     "reason": f"命中手冲/滤泡信号「{pat.strip()}」，非意式冲煮方式"}
     # 未命中排除形态：放行至评分；espresso_core 仅作质量报告信息字段
     reason = (f"命中意式核心词 {len(hits)} 个：{', '.join(hits[:4])}"
-              if hits else "源级预过滤已通过，放行至六维评分")
+              if hits else "源级预过滤已通过，放行至精评")
     return {"accept": True, "content_type": ctype, "espresso_core": espresso_core,
             "reason": reason}
 
@@ -539,7 +539,7 @@ def _llm_prescreen(cfg: dict, item: dict, hint: str) -> dict | None:
 
     判定哲学（2026-08-06 重写）：
     初筛是**快速闸门**，不是精读裁决。它只拦截「明显与意式无关」或「明显无信息价值」
-    的内容；边界模糊的一律放行，让下一轮精评的六维评分（意式相关性满分 30）+ 
+    的内容；边界模糊的一律放行，让下一轮精评（relevance 维度 + relevance<50% 否决）+ 
     min_score=60 做最终裁决——宁放过、勿误杀，否则日报会空掉。
     """
     client = _llm_client(cfg)
@@ -577,7 +577,7 @@ def _llm_prescreen(cfg: dict, item: dict, hint: str) -> dict | None:
         "无可复用结论——即使机型本身是意式器具也拒。\n"
         "9. 广告/促销/软文/抽奖/优惠码。\n\n"
         "【拿不准时】边界模糊、无法确定是否意式相关 → **放行（accept=true）**，"
-        "reason 注明「边界模糊交精评」。初筛宁放过、勿误杀——精评六维评分会把无关内容"
+        "reason 注明「边界模糊交精评」。初筛宁放过、勿误杀——精评 relevance 否决会把无关内容"
         "打到 60 分以下自然淘汰。\n\n"
         "【content_type 六选一】\n"
         "- expert_experiment：专家做的实验/建模/测量，有方法与数据。\n"
@@ -820,7 +820,7 @@ def cluster_events(judged: list, window_hours: int = 48) -> list:
 
 
 # ---------------------------------------------------------------------------
-# 规则回退评分（无 LLM）：同样输出六维明细，保证两条路径的字段一致
+# 规则回退评分（无 LLM）：同样输出维度明细，保证两条路径的字段一致
 # ---------------------------------------------------------------------------
 
 def _days_since(item: dict) -> int:
@@ -1064,7 +1064,7 @@ def _dim_rubric(content_type: str = "", lang: str | None = None) -> str:
 
 def _call_llm_meta(cfg: dict, item: dict, hint: str, content_type: str = "",
                    lang: str | None = None) -> Judgment | None:
-    """Two-Pass 第二段：精评。输出 title / tags / summary / kind / 六维分 / why_read。
+    """Two-Pass 第二段：精评。输出 title / tags / summary / kind / 维度分 / why_read。
 
     若 item 带 `full_text`（初筛通过后按需抓取所得），优先基于全文精评——
     这正是「先初筛、后全文」的收益：不再基于截断摘要虚构参数与结论。

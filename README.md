@@ -6,7 +6,7 @@
 - **动态标签（非固定分类）**：由 LLM 为每条内容生成 2-5 个**开放、具体**的主题标签
   （如 `9bar`、`水温`、`研磨度`、`布粉WDT`、`预浸泡`、`咖啡机`、`磨豆机`、`新手`、`评测`…），
   标签词表随内容动态生长；网站不做固定三分类，标签仅作**可筛选标签**。
-- **采集管线**：RSS + 学术源 → ① 源级关键词预筛 → ② LLM 初筛（拒非意式/纯展示/广告等）→ ③ 白名单源按需全文抓取 → ④ 六维可解释评分 → ⑤ 48h 同题聚类 → ⑥ 知识库深度解读（仅 `deepdive`）→ 落盘 `content/` → 静态生成 `public/`。学术雷达为**独立周级管线**，产出 `research/` 与知识库补丁，不进每日站点流。
+- **采集管线**：RSS + 学术源 → ① 源级关键词预筛 → ② LLM 初筛（拒非意式/纯展示/广告等）→ ③ 白名单源按需全文抓取 → ④ 多维可解释评分（按 content_type × lang 差异化维度集 + relevance 一票否决）→ ⑤ 48h 同题聚类 → ⑥ 知识库深度解读（仅 `deepdive`）→ 落盘 `content/` → 静态生成 `public/`。学术雷达为**独立周级管线**，产出 `research/` 与知识库补丁，不进每日站点流。
 - **筛选机制**：动态标签多选筛选（按词频渲染 chips）+ 按月份折叠的日期归档 + 关键词搜索，状态可用 URL hash 分享。
 - **部署**：静态站，部署到 **Cloudflare Pages**（免费套餐）。
 
@@ -79,9 +79,9 @@ src/
   content_loader.py   解析 content/*.md（frontmatter + Markdown）→ 结构化条目
   build.py            静态站生成器（Jinja2）→ public/（含动态标签页）
   fetch.py            抓取 RSS / 搜索接口（B站/知乎/smzdm）/ 知乎官方 CLI（type=zhihu_cli）/ 学术源；按需全文抓取；源级关键词预筛；抓取失败结构化记录
-  score.py            初筛 prescreen + 六维可解释评分（中英文独立维度表 CONTENT_TYPE_DIM_PROFILES / _ZH）+ 内容性质(content_type) + 48h 事件聚类 + 动态标签 + 分级(kind) + 深度解读
+  score.py            初筛 prescreen + 多维可解释评分（按 content_type × lang 差异化维度集，CONTENT_TYPE_DIM_PROFILES / _ZH）+ relevance 一票否决 + 内容性质(content_type) + 48h 事件聚类 + 动态标签 + 分级(kind) + 深度解读
   knowledge.py        基础/常青知识库加载与背景上下文拼接（私有，不参与建站）
-  pipeline.py         串联 fetch → 初筛 → 全文 → 六维精评 → 去重 → 聚类 → 配额 → 写 content → build → 质量报告落盘
+  pipeline.py         串联 fetch → 初筛 → 全文 → 多维精评 → 去重 → 聚类 → 配额 → 写 content → build → 质量报告落盘
   academic.py         每周学术雷达：抓论文 → 建研究卡 → 知识库补丁提案 → 周报 + 抽检清单（独立周级 CI）
   quality_report.py   每源候选/入选/拒绝/平均分 + 来源占比/重复率/意式核心占比 + 抓取失败维度，落 reports/
   templates/          layout / index / day / tag / macros
@@ -128,10 +128,10 @@ python scripts/new_day.py 2026-08-03     # 指定日期
 ```bash
 cp config.example.toml config.toml       # 按需开启 LLM、调整信息源
 # 在 .env 配置 ESPRESSO_LLM_API_KEY（OpenAI 兼容，如 DeepSeek）
-python -m src.pipeline                   # 预筛 → 初筛 → 全文(白名单) → 六维评分 → 聚类 → 配额 → 写 content → 构建 → 质量报告
+python -m src.pipeline                   # 预筛 → 初筛 → 全文(白名单) → 多维评分 → 聚类 → 配额 → 写 content → 构建 → 质量报告
 python -m src.pipeline --dry-run         # 只预览将收录的内容（不写 content/、不产生质量报告文件）
 ```
-- 管线内置三级编辑判断（见「编辑判断管线」一节）：源级预筛 → LLM 初筛 → 六维评分；`min_score=60` 以下不收录。
+- 管线内置三级编辑判断（见「编辑判断管线」一节）：源级预筛 → LLM 初筛 → 多维评分 + relevance 否决；`min_score=60` 以下不收录。
 - 标签由 LLM 动态生成（2-5 个具体主题标签）；未启用 LLM 时按关键词词典规则回退打标签。
 - 去重：同一 `source_url` / 标题不重复收录；同题事件经 48h 聚类折叠为 `related`。
 
@@ -198,7 +198,7 @@ tags: 9bar, 水温, 萃取率tds, 意式基础   # 2-5 个具体主题标签，�
 score: 85                             # 0-100 质量分（管线落盘；手写可选）
 kind: deepdive                        # 内容处理方式：as-is/translate/summary/deepdive（管线落盘）
 content_type: research               # 内容性质（管线落盘）：expert_experiment / independent_review / news / community_case / announcement / research
-score_dims: relevance=28|novelty=16|evidence=13|actionability=12|params=10|timeliness=5  # 六维明细（管线落盘）
+score_dims: relevance=22|info_density=28|industry_impact=20|timeliness=12  # 维度明细（键集按 content_type 差异化，管线落盘）
 why_read: 一句话说明为什么值得读        # 「为什么值得读」短句（管线落盘，可选）
 related: ["标题|https://...", "..."]   # 同题事件折叠的补充来源（48h 聚类产出；可选，不动 references）
 ---
@@ -236,53 +236,56 @@ related: ["标题|https://...", "..."]   # 同题事件折叠的补充来源（4
 简单资讯（简讯/新品发布等）不会被强行深度解读；`score < min_score` 的内容照旧不收录。
 单日页标题按当天实际含深度解读的篇数动态显示（无解读时不显示该文案）。
 
-## 编辑判断管线（阶段二：初筛 → 六维评分 → 聚类）
+## 编辑判断管线（阶段二：初筛 → 多维评分 → 聚类）
 
 管线对每条进入的内容做三级「编辑判断」，把 RSS 摘要墙压成 5–12 条高相关、可解释的「昨日精选」。所有逻辑在 `src/score.py`，落盘在 `src/pipeline.py`。
+
+> **中英双流架构**（2026-08-08）：英文源（RSS 图文）与中文源（B站/知乎）的抓取配置、评分维度表均已分离——英文走 `config.example.toml` + `CONTENT_TYPE_DIM_PROFILES`（CI 每日跑），中文走 `config.zh.toml` + `CONTENT_TYPE_DIM_PROFILES_ZH`（本地按需跑）。当前中文维度表结构与英文一致（行为不变），**中文源的评分维度尚未按中文内容特点单独优化**，留待后续。
 
 ### 1. 初筛（prescreen，Two-Pass 第一段）
 
 只看 **标题 + RSS 摘要 + 来源身份**，便宜地淘汰不值得后续成本的内容：
 
-- **LLM 优先**：`_llm_prescreen` 输出 `{accept, content_type, espresso_core, reason}`。判定哲学（2026-08 重写）：
-  - **先判意式相关**（命中任一即放行，不因标题无 espresso 字样而拒）：① 意式操作/技术直接相关（萃取参数/器具/工艺/奶咖）；② 意式生态/行业相关（设备新品发布、商用设备动态、咖啡师教育/赛事、意式饮品/器具研究如 espresso、moka pot）；③ 明确为意式服务（意式用豆烘焙、含机型+参数的可复用讨论）。
-  - **形态拒绝清单**（命中才拒）：其他冲煮方式（手冲/滤泡/法压/冷萃/爱乐压）、泛咖啡健康研究（研究主体是「咖啡」整体，非意式饮品）、种植/产地/供应链、咖啡店商业/空间/人物、咖啡周边、纯展示无参数、求助选购、广告促销。
-  - **拿不准一律放行**（reason 注明「边界模糊交精评」）——初筛宁放过、勿误杀，精评六维评分 + `min_score` 做最终裁决。
-  - 手冲识别辅以 `POUROVER_BREW_KEYWORDS` 关键词表（注入 prompt）：命中强手冲信号（pour over/v60/chemex/brewers cup 等）即使来自技术源、即使含 brew ratio 等两用词也判拒。
-- **规则回退**（无 LLM / LLM 失败）：只挡**明显**非意式或低质形态（纯展示、求助选购、广告、健康营养话题、手冲信号词），其余一律放行到六维评分阶段，由 `min_score` 硬门槛决定去留。
-  - 设计取舍：规则回退**不**自行做「是否意式核心」的硬判定——因为① 源级关键词预过滤（`_source_prefilter`）已把泛咖啡内容挡在门外；② 真正的灌水条（如「咖啡渣电脑包」「每天五杯咖啡」）即便放行，六维评分也会因 `relevance→0` / `evidence` 低跌破 60（已单测验证）；③ 若在初筛也卡核心词，无 LLM 时日报会直接空掉。
+- **程序化硬拒**（`_hard_reject_check`，零成本、不依赖 LLM）：命中 `PRESCREEN_REJECT_PATTERNS`（手冲/滤泡/法压/冷萃/爱乐压等非意式冲煮、纯展示帖、求助选购帖）或 `POUROVER_BREW_KEYWORDS` 即直接拒，**覆盖 LLM 的放行**。
+  - 健康话题例外：研究主体是 espresso/moka pot 等意式饮品本身时放行（如「意式浓缩降低肝病风险」），泛咖啡健康研究仍拒。
+- **LLM 初筛**：`_llm_prescreen` 输出 `{accept, content_type, espresso_core, reason}`。判定哲学：
+  - **先判意式相关**（命中任一即放行）：① 意式操作/技术直接相关（萃取参数/器具/工艺/奶咖）；② 意式生态/行业相关（设备新品、商用动态、咖啡师赛事、意式饮品研究）；③ 明确为意式服务（意式用豆烘焙、含机型+参数的可复用讨论）。
+  - **形态拒绝清单**（命中才拒）：其他冲煮方式、泛咖啡健康研究、种植/产地/供应链、咖啡店商业、咖啡周边、纯展示无参数、求助选购、**维修/耐用性个案**（单点故障无调参价值，即使机型是意式器具也拒）、广告促销。
+  - **意式器具定义**：磨豆机含支持意式研磨度的手摇磨（1Zpresso J-Ultra/Commandante C40 等），不区分手摇与电动，只看是否支持意式研磨度。
+  - **拿不准一律放行**——初筛宁放过、勿误杀，精评 relevance 否决做最终兜底。
+- **规则回退**（无 LLM / LLM 失败）：只挡明显非意式或低质形态，其余放行至精评。即使无关内容漏放，精评的 relevance 否决也会兜底拦截。
+- `espresso_core=false` 兜底：LLM 判定非意式核心时直接拒，除非 `content_type=research` 且研究主体是意式饮品。
 - 与 `fetch.py` 的 `_source_prefilter`（更前置、零成本的源级关键词闸门）**串联不冲突**。
 
-### 2. 六维可解释评分
+### 2. 多维可解释评分（按 content_type × lang 差异化维度集）
 
-精评（Two-Pass 第二段）对每条内容打**六维明细**，而非单分黑箱。**六维满分按 content_type 差异化**（`CONTENT_TYPE_DIM_PROFILES`，每种类型总分恒 100），权重反映「这类内容的实际价值点」：
+精评（Two-Pass 第二段）对每条内容打**维度明细**，而非单分黑箱。**每种 content_type 有独立的 3-4 维度集**（`CONTENT_TYPE_DIM_PROFILES`），维度键、满分、数量都按类型设计，总分恒 100：
 
-| 维度 | news | announcement | expert_experiment | research | independent_review | community_case |
-|---|---:|---:|---:|---:|---:|---:|
-| 意式相关性 relevance | 30 | 25 | 25 | 20 | 25 | 25 |
-| 新颖性 novelty | 25 | 25 | 15 | 20 | 10 | 10 |
-| 可操作性/实用价值 actionability | 10 | 5 | 10 | 5 | 20 | 20 |
-| 证据质量 evidence | 15 | 15 | 20 | 25 | 15 | 5 |
-| 参数具体度 params | 5 | 20 | 15 | 15 | 20 | 25 |
-| 内容有效时间 timeliness | 15 | 10 | 15 | 15 | 10 | 15 |
+| content_type | 维度集（满分） | 评什么 |
+|---|---|---|
+| expert_experiment（实验研究） | relevance(25) · 结论价值(35) · 数据具体度(25) · 可操作性(15) | 专家实验的核心是「得出了什么结论」 |
+| independent_review（独立测试） | relevance(25) · 测试覆盖(35) · 数据深度(25) · 选购指导(15) | 评测的核心是「测了多少」 |
+| news（行业消息） | relevance(25) · 信息密度(35) · 行业影响(25) · 时效性(15) | 新闻的核心是「有多少实质信息」 |
+| community_case（社区验证） | relevance(25) · 参数具体度(35) · 解决方案(25) · 可复现性(15) | 社区个案的核心是「信息有多具体」 |
+| announcement（官方公告） | relevance(25) · 规格完整度(40) · 决策影响(25) · 时效性(10) | 公告的核心是「规格说清楚了没」 |
+| research（学术研究） | relevance(25) · 结论可操作性(40) · 证据可见度(25) · 新颖性(10) | 研究对读者的价值是「能不能指导操作」 |
 
-- **actionability 语义按类型区分**：对操作类（评测/实验/社区个案）= 读者能否据此改变操作；对资讯类（news/announcement）= 信息的实用/决策价值（行业动态、新品信息本身即有价值，不因「无法操作」给 0-2 分）。
-- **timeliness = 内容有效时间**（2026-08 重定义，非「发布新鲜度」）：原理性/长期恒定有效的内容（萃取物理、标准配方逻辑、通用方法论）高分；当季新品/短期趋势中分；一次性/即时新闻低分。采集层已保证新鲜度，评分层不再重复奖励「新」。
-- **evidence 按类型给合理锚点**：community_case 满分仅 5（单人经验），不因「非权威来源」额外压分；research 满分 25（学术重证据）。
-- **刻意不用「来源分数 × 系数」**：那种做法会让权威但无关的内容自动高分（例：Barista Hustle 发一篇滤泡文章也被抬到 80+）。来源只经 `evidence` 一维参与打分，另外只影响配额与同分排序。
-- **分档**：85+ 罕见强证据 · 70–84 日报主内容 · 60–69 确有补充价值才收 · **<60 不发布**（`llm.min_score = 60` 硬门槛，各类型满分均为 100，语义不变）。
-- **同分排序**：证据等级 > 来源多样性 > 事件是否重复（不单看总分）。
-- LLM 启用时基于**全文**精评（初筛通过后才抓全文，见下）；未启用时同样输出六维明细（规则启发式，`_rule_dims` 按类型满分裁剪 + 有效时间启发式），字段一致。六维明细落 `score_dims` 到 frontmatter，`why_read` 一句「为什么值得读」同步落盘（卡片展示用）。
-- **中英文评分分离**（2026-08-08）：`score.py` 按 `item['lang']` 选择维度表——英文走 `CONTENT_TYPE_DIM_PROFILES`，中文走独立的 `CONTENT_TYPE_DIM_PROFILES_ZH`（当前标准与英文一致、结构独立）。中文流（B站/知乎）后续可单独调优维度权重或新增 `min_score_zh`，不影响英文流。详见「每日更新机制 → D. 中英双流架构」。
+设计原则（2026-08-06 v2 重构，详见 [.trae/documents/评分机制优化方案_从实际出发.md](.trae/documents/评分机制优化方案_从实际出发.md)）：
+- **只评材料可见信号**（数据/参数/结论/规格），不评学术抽象（严谨度/方法论）——LLM 看不到方法论，只能猜
+- **核心维满分 35-40**，让 LLM 敢拉开差距；维度数 ≤4，减少凑分空间
+- **relevance 一票否决**：`relevance < 满分 × 50%` → 直接判死（score=0），不参与 min_score 比较——即使初筛漏放无关内容，relevance 否决兜底拦截
+- **分档**：85+ 罕见强证据 · 70–84 日报主内容 · 60–69 确有补充价值才收 · **<60 不发布**（`llm.min_score = 60`）
+- **同分排序**：证据等级 > 来源多样性 > 事件是否重复
+- LLM 启用时基于**全文**精评；未启用时走规则回退（`_rule_dims`，基线 30% + 关键词加成），字段一致。维度明细落 `score_dims` 到 frontmatter，`why_read` 同步落盘。
+- **无全文不压分**：评分按材料中**可见**信息如实打分，不被「是否抓到全文」影响——全文是加分项，缺全文不是扣分项。
 
 ### 3. 按需全文抓取（稀缺资源）
 
 RSS 摘要普遍被截断（几十到两百字），基于截断摘要做精评容易让模型「补全」出原文没有的参数与结论。全文能消除这类虚构，但抓取有流量与封禁成本，因此它是**稀缺资源**：
 
-- 只对 **① 白名单来源**（config 里 `full_text = true`，如 Barista Hustle / Coffee Ad Astra / CoffeeGeek / Daily Coffee News / Whole Latte Love / Clive Coffee）**② 初筛 `accept` 的条目**——二者同时满足才抓（`fetch.py` 的 `fetch_full_article`）。
+- 只对 **① 白名单来源**（config 里 `full_text = true`，如 Barista Hustle / Scott Rao / Decent Espresso / CoffeeGeek / Daily Coffee News）**② 初筛 `accept` 的条目**——二者同时满足才抓（`fetch.py` 的 `fetch_full_article`）。
 - 轻量正文提取（`extract_article_text`）不引重依赖：剥样板块 → 优先 `<article>/<main>` 容器 → 取 `<p>/<li>` 段落拼接；低于阈值回退 RSS 摘要。
 - `[fetch]` 下的 `fulltext_enabled` / `fulltext_max_per_run` / `fulltext_delay` / `fulltext_timeout` 是成本闸门，防止一次运行烧太多流量或被封。
-- **无全文不压分**（2026-08 修正）：评分完全交给六维 rubric，`params`/`evidence` 按材料中**可见**信息如实打分，不被「是否抓到全文」这一采集状态影响——全文是加分项（信息更全），缺全文不是扣分项。个别源（如 Daily Coffee News 对 GitHub runner IP 403）因此仍可基于 RSS 摘要正常收录。
 
 ### 4. 48h 轻量事件聚类
 

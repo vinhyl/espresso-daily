@@ -233,7 +233,7 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
     # 运行质量报告（阶段二）：贯穿整轮，最后落盘
     quality = quality_mod.QualityReport(cfg, run_date)
 
-    # —— 1) 两阶段评估：初筛（便宜闸门）→ 按需全文 → 六维精评 ——
+    # —— 1) 两阶段评估：初筛（便宜闸门）→ 按需全文 → 多维精评 ——
     #    源级关键词预过滤已在 fetch 层完成；这里先初筛淘汰不值钱的内容，
     #    再对「白名单 + 初筛通过」的条目抓全文（稀缺资源），最后精评。
     judged = []
@@ -273,7 +273,7 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
             else:
                 n_fulltext_fail += 1
 
-        # Pass 2：六维精评（带 content_type；有全文则基于全文，避免虚构参数）
+        # Pass 2：多维精评（按 content_type + lang 选维度集；有全文则基于全文，避免虚构参数）
         kb_ctx = knowledge_mod.build_context(it, knowledge_entries, cfg)
         j = score_mod.judge(
             it, cfg, hint=hint, knowledge_ctx=kb_ctx,
