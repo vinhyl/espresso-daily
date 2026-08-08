@@ -1,0 +1,322 @@
+# ============================================================================
+# 意式浓缩日报 (Espresso Daily) — 配置文件示例
+# 复制为 config.toml 后修改；不要提交含密钥的 config.toml（LLM key 走 .env）。
+# ============================================================================
+
+[site]
+title = "ESPRESSO DAILY"
+subtitle = "意式浓缩 · 每日资讯流"
+# 网站描述（用于 meta / OG）
+description = "每日汇集意式浓缩咖啡的萃取理论与实操资讯，由 LLM 动态打标签（水压、水温、研磨度、器具评测…），可按标签/日期自由筛选。"
+# 构建输出目录（Cloudflare Pages 输出目录设为 public）
+output_dir = "public"
+content_dir = "content"
+base_url = ""   # 部署到子路径时填，例如 https://example.com/espresso ；根域留空
+
+# ----------------------------------------------------------------------------
+# 前端展示开关
+# ----------------------------------------------------------------------------
+[ui]
+# 是否展示标签功能（筛选 chips / 热门标签云 / 标签页）。
+# 当前标签生成机制较粗糙、标签过多且无实际意义，先关闭；
+# 待采集一段时间、明确标签必要性后再评估机制，改为 true 即恢复。
+show_tags = false
+
+# ----------------------------------------------------------------------------
+# 标签策略：不使用固定三分类。由 LLM/规则在整理时为每条内容生成 2-5 个
+# 开放、具体的主题标签（如 9-bar、水温、研磨度、布粉wdt、咖啡机、磨豆机、
+# 新手、评测…）。构建期从全量内容汇总词频，前端动态渲染筛选 chips 与标签页。
+# 因此本配置**不再需要** categories 定义；下面仅保留一个可选的种子标签建议，
+# 供 LLM 参考，不影响流程（可删除）。
+# ----------------------------------------------------------------------------
+[tags]
+# 仅作为 LLM 打标签时的候选词表提示，可自由增删
+suggestions = [
+  "9-bar", "水温", "研磨度", "布粉wdt", "填压", "预浸泡", "通道效应",
+  "萃取率tds", "粉水比", "奶泡", "调参dialin", "咖啡机", "磨豆机",
+  "粉碗", "秤", "新手", "进阶", "评测", "对比", "意式基础",
+]
+
+# ----------------------------------------------------------------------------
+# LLM 整理配置（OpenAI 兼容接口，例如 DeepSeek / 通义 / GLM）
+# ----------------------------------------------------------------------------
+[llm]
+enabled = true                       # 本地已配 ESPRESSO_LLM_API_KEY（.env），启用 LLM 精评；无 key 时自动回退规则
+base_url = "https://api.deepseek.com/v1"
+api_key_env = "ESPRESSO_LLM_API_KEY"
+model = "deepseek-chat"
+# 评分阈值：低于此分的内容不收录
+min_score = 60
+# 每日最多收录条数（硬上限，宁缺毋滥；资讯少的日子可以更少）
+max_per_day = 12
+temperature = 0.2
+# 深度解读开关：true 时，仅 kind=deepdive 的内容会在「阶段二」注入知识库生成
+# 「深度解读」区块（两阶段流程见 src/score.py 模块注释）；false 时所有内容
+# 只产出正文（原文直出 / 翻译直出 / 中文摘要），不产出深度解读。
+deepdive_enabled = true
+# 每日总标题开关：在 llm.enabled 基础上额外控制。true 时 LLM 会为当天全部
+# 已收录资讯生成一个「概括性总标题」（content/{date}-00.md），用作归档列表/
+# 首页近期日报卡片的日报标题；未启用/生成失败时回退当日最高分条目标题。
+headline_enabled = true
+# 每日总标题长度阈值（软/硬两级）：
+#   headline_soft_chars : 生成结果超过此字数 → 触发一次 LLM 压缩重试（保留核心信息）
+#   headline_max_chars  : 压缩后仍超过此字数 → 丢弃并回退最高分条目标题
+headline_soft_chars = 60
+headline_max_chars = 100
+
+# ----------------------------------------------------------------------------
+# 信息源（详见 SOURCES.md）。type: rss | search | manual
+#   rss    : 标准 RSS/Atom，也适用于「自托管 RSSHub」生成的 feed
+#   search : 调用站点 JSON 搜索接口并归一化（parser: zhihu/bilibili/smzdm）
+#   manual : 人工精选（new_day.py 脚手架写 Markdown），不自动抓取
+# category_hint 仅作 LLM/回退的弱提示（mixed/theory/technique/product），
+# 不再决定最终标签——最终标签由 LLM 动态生成。
+# ----------------------------------------------------------------------------
+[[sources]]
+name = "Sprudge"
+type = "rss"
+url = "https://sprudge.com/feed"
+category_hint = "industry"          # 低频文化信号源，降为补充，不再承担日报数量
+lang = "en"
+enabled = false   # 2026-08-08 实测（本机+CI 均 403）：Cloudflare JS 质询页「Just a moment...」，换 UA 无效，HTTP 客户端无法绕过；待源站放行或改走 RSSHub 再启用
+max_per_source = 1                  # 每期最多 1 条
+include_any = ["espresso", "machine", "grinder", "cafe", "roaster", "coffee", "barista", "latte", "cappuccino", "brew", "launch", "new", "review", "portafilter"]
+exclude_any = ["health", "wellness", "recipe", "food", "cocktail", "beer", "wine"]
+
+[[sources]]
+name = "Perfect Daily Grind"
+type = "rss"
+url = "https://perfectdailygrind.com/feed/"
+category_hint = "industry"          # 降为补充源：仅收影响意式用户的豆种/烘焙/供应链变化
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+include_any = ["bean", "roast", "roasting", "origin", "supply", "varietal", "espresso", "blend", "green coffee", "coffee price", "tariff", "export", "harvest", "farm", "producer", "traceab", "trade"]
+exclude_any = ["health", "wellness", "recipe", "brew guide", "how to"]
+
+[[sources]]
+name = "Daily Coffee News"
+type = "rss"
+url = "https://dailycoffeenews.com/feed/"
+category_hint = "industry"          # 强化意式过滤：设备/浓缩/奶咖自动化/商用工作流/行业变化
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
+include_any = ["espresso", "espresso machine", "grinder", "extraction", "milk", "steaming", "latte", "cappuccino", "portafilter", "pressure", "commercial", "cafe", "roaster", "roasting", "coffee machine", "brew", "brewing", "supply", "oem", "launch", "new product", "product", "barista", "lever", "boiler", "introduc", "unveil", "acquire", "partnership"]
+exclude_any = ["fair trade", "health", "wellness", "nutrition", "nutritional", "nutrient", "benefit of coffee", "study finds"]
+
+[[sources]]
+name = "Barista Hustle"
+type = "rss"
+url = "https://www.baristahustle.com/feed/"   # /blog/feed/ 实测返回 403，已改根路径
+category_hint = "tech_experiment"            # 优先级最高的差异化技术源
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
+lookback_days = 7                           # 月更源放宽窗口；2026-08-06 由 21 收紧，减少旧货进池（防「旧闻当新收」）
+
+[[sources]]
+name = "Reddit r/espresso"
+type = "rss"
+url = "https://www.reddit.com/r/espresso/top/.rss?t=week"   # 改取 top 流，赞/评论作排序信号
+category_hint = "community"          # 降级为社区补充，每期最多 2 条
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+lookback_days = 3                     # 2026-08-06 由 7 收紧：周榜近 3 天已覆盖热帖，减少旧帖进池
+max_per_source = 2
+include_any = ["espresso", "machine", "grinder", "dial", "dose", "yield", "flow", "channel", "pressure", "temp", "pid", "mod", "build", "setup", "recipe", "extraction", "puck", "shot", "shots", "barista", "lever", "e61", "portafilter", "scale", "wdt", "distribution", "preinfusion", "steam", "milk", "grind", "burr", "9 bar", "9bar", "profiles", "profiling"]
+exclude_any = ["just got", "finally got", "new setup", "first machine", "help me choose", "recommend me", "rate my", "show off", "my new", "bought", "should i buy", "looking for a", "what should i", "pick between", "gift for"]
+
+# ---- 新增：能改变内容结构的差异化技术/评测源（阶段一 1.2）----
+[[sources]]
+name = "Coffee Ad Astra"
+type = "rss"
+url = "https://coffeeadastra.com/feed/"
+category_hint = "tech_experiment"   # 专家实验与建模，须二次过滤仅取 Espresso/Extraction/Physics
+lang = "en"
+enabled = false   # 2026-08-08 实测：252 天无更新（近停更），每期静默 0 候选；待恢复更新再启用
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
+include_any = ["espresso", "extraction", "physics", "pressure", "flow", "channel", "grind", "puck", "percolation", "profiling", "tds", "dial", "brew", "temperature", "water", "dose"]
+exclude_any = ["pourover", "pour over", "v60", "aeropress", "french press", "cold brew"]
+
+# ---- 2026-08-08 新增：补强 tech_experiment 档（Ad Astra 停用后技术档空缺）----
+[[sources]]
+name = "Scott Rao"
+type = "rss"
+url = "https://www.scottrao.com/blog?format=rss"   # Squarespace 标准 RSS；2026-08-08 实测可用，最新 08-07
+category_hint = "tech_experiment"   # 萃取实验/建模权威（《Espresso Extraction》作者），技术档最高优先级
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+full_text = true                    # 全文白名单：初筛通过后抓原文正文
+include_any = ["espresso", "extraction", "grind", "crema", "channel", "pressure", "flow", "profile", "dose", "ratio", "puck", "preinfusion", "tds", "water"]
+exclude_any = ["roast", "roasting", "pour over", "pourover", "v60", "aeropress", "french press", "cold brew", "filter"]
+
+[[sources]]
+name = "Decent Espresso"
+type = "rss"
+url = "https://fast.decentespresso.com/blog/decent_espresso_blog_en.rss"   # 官网显式 RSS；2026-08-08 实测可用，最新 05-19
+category_hint = "tech_experiment"   # prosumer 设备 + 冲煮曲线 + 软件更新，贴合技术实验定位
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+full_text = true                    # 全文白名单：初筛通过后抓原文正文
+include_any = ["espresso", "profile", "extraction", "pressure", "flow", "machine", "software", "update", "bengle", "de1", "recipe", "temperature", "shot", "steam", "portafilter"]
+exclude_any = ["pour over", "pourover", "v60", "cold brew", "tea", "decaf"]
+
+[[sources]]
+name = "CoffeeGeek"
+type = "rss"
+url = "https://coffeegeek.com/feed/"
+category_hint = "independent_review"   # 独立设备评测，每期最多 1 条
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+# 2026-08-08 决策：保持默认 lookback_days（全局 3），不加源级放宽——低频源只是更新节奏慢，
+# 一有新文（日期落在窗口内）即正常进池；放宽窗口才会引入旧文回流，勿改。
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
+max_per_source = 1
+include_any = ["espresso", "grinder", "portafilter", "espresso machine", "milk", "steam", "brew", "review", "coffee", "machine"]
+exclude_any = ["pourover", "pour over", "v60", "drip", "french press", "cold brew", "tea"]
+
+[[sources]]
+name = "Whole Latte Love"
+type = "rss"
+url = "https://www.wholelattelove.com/blogs/tech-tips.atom"
+category_hint = "tutorial"          # 品牌教程，与 Clive 合计每期最多 1 条
+lang = "en"
+enabled = false   # 2026-08-08 实测：142 天无更新（已停更），每期静默 0 候选；待恢复更新再启用
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
+quota_group = "gear_tutorials"
+max_per_group = 1
+include_any = ["espresso", "grinder", "machine", "portafilter", "milk", "steam", "brew", "dial", "tds", "cleaning", "maintenance", "pressurized", "crema"]
+exclude_any = ["pourover", "cold brew", "tea", "drip"]
+
+[[sources]]
+name = "Clive Coffee"
+type = "rss"
+url = "https://www.clivecoffee.com/blogs/learn.atom"
+category_hint = "tutorial"          # 品牌教程，与 WLL 合计每期最多 1 条
+lang = "en"
+enabled = false   # 仅中文源配置：英文源交给 CI（config.example.toml）跑
+full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
+quota_group = "gear_tutorials"
+max_per_group = 1
+include_any = ["espresso", "grinder", "machine", "portafilter", "milk", "steam", "brew", "dial", "tds", "cleaning", "maintenance", "pressurized", "crema"]
+exclude_any = ["pourover", "cold brew", "tea", "drip"]
+
+# ---- 中文 / 非 RSS 源：本地补充（config.toml 已 gitignore，仅本地生效）----
+# 本地启动 RSSHub：cd ~/rsshub && npm start（监听 1200，Node 直跑无需 docker）。
+# 本地跑出的中文条目经 git push 手动补充到仓库；CI 用 config.example.toml（中文源关闭）。
+# 2026-08-08 实测结论：B站直连搜索为主力（20 条/次，稳定）；豆瓣经 RSSHub 可达（近 3 天小组无新帖时为 0）；
+# 知乎搜索路由在新版 RSSHub 已移除（404），日报为泛内容不接入，改走人工精选。
+[[sources]]
+name = "知乎 · 意式浓缩"
+type = "zhihu_cli"                       # 知乎官方 CLI（Access Secret 认证，走钥匙串），2026-08-08 接入
+query = "意式浓缩||意式咖啡||咖啡机 评测"   # 多词用 || 分隔，依次搜索合并去重；每词 count 受 max_per_source 约束
+category_hint = "mixed"
+lang = "zh"
+enabled = true
+max_per_source = 5                       # 每词最多 5 条（CLI 上限 10）；3 词合计最多 15 条
+full_text = true                         # 初筛通过后可抓原文正文（CLI 返回摘要，正文抓取仍走 fetch.py 全文逻辑）
+
+[[sources]]
+name = "B站 · 意式浓缩咖啡"
+type = "rss"
+url = "http://127.0.0.1:1200/bilibili/search/all/%E6%84%8F%E5%BC%8F%E6%B5%93%E7%BC%A9%E5%92%96%E5%95%A1"
+category_hint = "mixed"
+lang = "zh"
+enabled = false   # RSSHub 新版此路由已废弃（404，新版为 /bilibili/vsearch/:kw 但需 Playwright chromium）；改用下方直连搜索
+
+[[sources]]
+name = "豆瓣 · 咖啡小组"
+type = "rss"
+url = "http://127.0.0.1:1200/douban/group/717430"   # 咖啡宇宙-关于咖啡的一切（2026-08-08 实测可用；想换组改 id 即可）
+category_hint = "mixed"
+lang = "zh"
+enabled = false   # 2026-08-08 实测：豆瓣路由请求会打崩 RSSHub 进程（静默死亡/502），且近 3 天常 0 条；待 RSSHub 豆瓣路由稳定或配 cookie 再启用
+
+# ---- 中文 / 非 RSS 源：直连搜索接口（无需 RSSHub，但不稳定需维护） ----
+[[sources]]
+name = "知乎搜索 · 意式浓缩"
+type = "search"
+parser = "zhihu"
+url = "https://www.zhihu.com/api/v4/search_v3?t=general&q=%E6%84%8F%E5%BC%8F%E6%B5%93%E7%BC%A9&limit=20"
+referer = "https://www.zhihu.com/"
+category_hint = "mixed"
+lang = "zh"
+enabled = false    # 知乎反爬，建议优先 RSSHub
+
+[[sources]]
+name = "B站搜索 · 意式浓缩"
+type = "search"
+parser = "bilibili"
+url = "https://api.bilibili.com/x/web-interface/search/all/v2?keyword=%E6%84%8F%E5%BC%8F%E6%B5%93%E7%BC%A9%E5%92%96%E5%95%A1&page=1"
+referer = "https://www.bilibili.com/"
+category_hint = "mixed"
+lang = "zh"
+enabled = true    # 2026-08-08 实测直连可用（HTTP 200 正常 JSON）；知乎直连 400 已被反爬，走 RSSHub
+
+[[sources]]
+name = "什么值得买 · 咖啡"
+type = "manual"
+url = "https://post.smzdm.com/"
+category_hint = "product"
+lang = "zh"
+enabled = false    # 以人工精选为主（或直接用 RSSHub 的 smzdm 路由）
+
+# ----------------------------------------------------------------------------
+# 抓取行为
+# ----------------------------------------------------------------------------
+[fetch]
+# 每源间隔（秒），礼貌抓取
+per_source_delay = 2.0
+user_agent = "EspressoDaily/0.1 (+https://github.com/your-org/espresso-daily)"
+# 回看窗口（天）：只处理最近 N 天发布的条目
+lookback_days = 3
+# 归档时区：海外 RSS 发布时间多为 UTC，按此时区截日，使「当天采集」归当天。
+# 国内用户为主，建议 Asia/Shanghai（=GMT+8）。留空则回退机器本地时区。
+# 注意：Windows 显式用时区名需先装 tzdata（pip install tzdata）；留空则无需。
+timezone = "Asia/Shanghai"
+
+# ---- 按需全文抓取（阶段二）----
+# 全文是稀缺资源：只有 ① 源上标了 full_text = true ② 该条通过 LLM 初筛(accept)
+# 两个条件同时满足，才会去抓原文正文。目的是避免基于截断 RSS 摘要虚构参数/细节，
+# 同时不给源站带来全量抓取压力。
+fulltext_enabled = true
+fulltext_max_chars = 12000     # 正文截断上限（控制送进 LLM 的 token）
+fulltext_timeout = 20          # 单篇超时（秒）
+fulltext_delay = 1.0           # 每篇全文之间的间隔（秒），礼貌抓取
+fulltext_max_per_run = 12      # 每次运行最多抓多少篇全文（成本闸门）
+
+# ----------------------------------------------------------------------------
+# 基础 / 常青知识库（私有，不参与建站）
+# 每个主题一篇（knowledge/<slug>.md），是对多篇权威文章的综合，正文末尾用
+# 「## 参考来源」列出全部源头。AI 在解读新闻时把本库作为背景上下文注入，
+# 做多角度深度整理（详见 README / SOURCES）。
+#   dir       : 知识库目录（相对项目根）
+#   mode      : all=全量注入（小库最全面，默认）；recall=按标签/概念高召回
+#   max_chars : 背景上下文字符预算，超过截断（静默截断，无报错！）
+# 2026-08 扩充后整库约 23 篇 / 18K 字符；预算 24000 留约 30% headroom
+# 覆盖学术雷达补丁的追加增长。库总量接近预算 80% 时评估切 recall。
+# ----------------------------------------------------------------------------
+[knowledge]
+dir = "knowledge"
+mode = "all"
+max_chars = 24000
+
+# ----------------------------------------------------------------------------
+# 每周学术雷达（阶段三，type=academic）
+# 仅供周级 CI（weekly.yml → `python -m src.academic`）使用，**不要开启 enabled**，
+# 否则每日管线会把论文抓进 content/，污染每日站点流。weekly 模式会无视 enabled
+# 直接消费所有 type=academic 的源。
+#   academic_must    : 多个检索词，全部以 OpenAlex abstract_search 串联 → AND 约束
+#   academic_exclude : 标题/摘要命中任一即丢弃（非意式主题）
+#   academic_filters : 透传 OpenAlex filter 串（如 from_publication_date 限定年份）
+# ----------------------------------------------------------------------------
+[[sources]]
+name = "Espresso Extraction (OpenAlex+Crossref)"
+type = "academic"
+category_hint = "research"
+lang = "en"
+enabled = false
+academic_must = ["espresso", "extraction"]
+academic_exclude = ["tea", "pourover", "pour over", "cold brew", "caffeine health", "decaf", "sensory", "consumer"]
+academic_filters = "from_publication_date:2015-01-01"
+max_per_source = 8

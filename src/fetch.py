@@ -21,6 +21,7 @@ import email.utils
 import json
 import os
 import re
+import subprocess
 import time
 import zoneinfo
 from datetime import datetime, timezone
@@ -108,6 +109,102 @@ def _smzdm_parse(raw: dict, source: dict) -> list[dict]:
             "lang": source.get("lang", ""), "hint": source.get("category_hint", "mixed"),
         })
     return out
+
+
+# ---------------------------------------------------------------------------
+# 知乎官方 CLI 适配器（type=zhihu_cli）
+# 调用本机安装的 zhihu-cli（Access Secret 认证，走钥匙串），搜索知乎内容。
+# 安装与配置见 SOURCES.md「路径 0：知乎官方 CLI」。
+# 2026-08-08 接入：官方通道，无反爬；邀测额度知乎搜索 5000 次/天。
+# ---------------------------------------------------------------------------
+
+# 本机 CLI 路径（setup.sh 安装；可用 ZHIHU_CLI_BIN 环境变量覆盖）
+DEFAULT_ZHIHU_CLI = os.path.expanduser(
+    "~/Library/Application Support/zhihu-cli/current/zhihu-cli"
+)
+
+
+def fetch_zhihu_cli(source: dict, lookback_days: int = 3, failures: list | None = None,
+                    cli_bin: str | None = None) -> list[dict]:
+    """调用知乎官方 CLI 搜索，返回与 RSS 同构的条目列表。
+
+    - cli_bin：CLI 绝对路径，缺省 DEFAULT_ZHIHU_CLI（可被环境变量 ZHIHU_CLI_BIN 覆盖）
+    - query：取 source["query"]（搜索词），可带多个用 || 分隔（依次搜索合并去重）
+    - lookback_days：回看窗口，仅保留窗口内的条目（知乎搜索按相关度排序，易回旧文；
+      2026-08-08 实测近 3 天窗口内常 0 条，属知乎搜索特性，勿放宽——放宽即旧文回流）
+    - 输出：`zhihu-cli search zhihu --query <q> --count <n> --pretty` 的 JSON
+    """
+    bin_path = cli_bin or os.getenv("ZHIHU_CLI_BIN", "") or DEFAULT_ZHIHU_CLI
+    if not os.path.exists(bin_path):
+        _record_failure(failures, source, "zhihu-cli", FileNotFoundError(
+            f"zhihu-cli 未安装（{bin_path}）。见 SOURCES.md「路径 0：知乎官方 CLI」。"))
+        return []
+    queries = [q.strip() for q in str(source.get("query", "")).split("||") if q.strip()]
+    if not queries:
+        _record_failure(failures, source, "zhihu-cli",
+                        ValueError("type=zhihu_cli 源需要 query 字段（支持 || 分隔多词）"))
+        return []
+    count = int(source.get("max_per_source") or source.get("count") or 10)
+    count = max(1, min(count, 10))   # CLI 上限 10
+
+    # lookback 过滤：与 fetch_rss 的 cutoff 一致（目标时区「今天」为基准）
+    tz = zoneinfo.ZoneInfo("Asia/Shanghai")
+    cutoff = (dt.datetime.now(tz) - dt.timedelta(days=lookback_days)).date()
+
+    items: list[dict] = []
+    seen_urls: set[str] = set()
+    for q in queries:
+        try:
+            proc = subprocess.run(
+                [bin_path, "search", "zhihu", "--query", q, "--count", str(count), "--pretty"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError(proc.stderr.strip() or f"exit {proc.returncode}")
+            raw = json.loads(proc.stdout)
+        except Exception as e:
+            _record_failure(failures, source, f"zhihu-cli search:{q}", e)
+            continue
+        for it in (raw.get("Data") or {}).get("Items") or []:
+            url = (it.get("Url") or "").split("?")[0]   # 去 utm 参数
+            if not url or url in seen_urls:
+                continue
+            # EditTime 为 Unix 秒（可能缺失），截日归档
+            published = dt.datetime.now().strftime("%Y-%m-%d")
+            et = it.get("EditTime")
+            if et:
+                try:
+                    published = datetime.fromtimestamp(
+                        int(et), tz=tz
+                    ).strftime("%Y-%m-%d")
+                except Exception:
+                    pass
+            # 旧文过滤：早于 cutoff 丢弃（知乎搜索按相关度排序，天然回旧文）
+            try:
+                if dt.datetime.strptime(published, "%Y-%m-%d").date() < cutoff:
+                    continue
+            except Exception:
+                pass
+            seen_urls.add(url)
+            items.append({
+                "title": _clean(it.get("Title") or ""),
+                "summary": _clean(it.get("ContentText") or ""),
+                "link": url,
+                "source_url": url,
+                "published": published,
+                "source": source["name"],
+                "lang": source.get("lang", "zh"),
+                "hint": source.get("category_hint", "mixed"),
+                # 作者/互动量：社区类排序信号
+                "author": _clean(it.get("AuthorName") or ""),
+                "engagement": int(it.get("VoteUpCount") or 0),
+                "max_per_source": source.get("max_per_source"),
+                "quota_group": source.get("quota_group"),
+                "max_per_group": source.get("max_per_group"),
+                "allow_full_text": bool(source.get("full_text", False)),
+            })
+        print(f"[fetch] 源 {source['name']}（zhihu_cli/{q}）：{len(items)} 条累计")
+    return items
 
 
 SEARCH_PARSERS = {
@@ -705,6 +802,8 @@ def fetch_all(cfg: dict | None = None, failures: list | None = None) -> list[dic
             src_items = fetch_rss(s, lb, tz, user_agent=ua, failures=failures)
         elif s.get("type") == "search":
             src_items = fetch_search(s, lb, user_agent=ua, failures=failures)
+        elif s.get("type") == "zhihu_cli":
+            src_items = fetch_zhihu_cli(s, lb, failures=failures)
         elif s.get("type") == "academic":
             # 学术雷达：周级 CI 调用；每日 config 一般不含此类源
             src_items = fetch_academic(s, lb, user_agent=ua, failures=failures)
