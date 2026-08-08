@@ -22,7 +22,7 @@
 
 | # | 名称 | Feed URL | 覆盖内容 | 状态 |
 |---|------|----------|----------|------|
-| A1 | **Sprudge** | `https://sprudge.com/feed` | 咖啡新闻、文化、器具(Gear)、城市指南、厂商动态 | ✅ 手测；**降为低频文化信号源**（industry，每期≤1，关键词过滤） |
+| A1 | **Sprudge** | `https://sprudge.com/feed` | 咖啡新闻、文化、器具(Gear)、城市指南、厂商动态 | ✅ 手测；**2026-08-08 起停用**（Cloudflare JS 质询页 403，本机+CI 均被拦，换 UA 无效；待放行或改走 RSSHub 再启用） |
 | A2 | **Perfect Daily Grind** | `https://perfectdailygrind.com/feed/` | 全产业链：产地、烘焙、行业、冲煮、espresso 专题 | ✅ 手测；**降为补充源**（industry，仅收豆种/烘焙/供应链变化，关键词过滤） |
 | A3 | **Daily Coffee News** | `https://dailycoffeenews.com/feed/` | 行业商业新闻、新品、市场 | ✅ 手测；**强化意式过滤**（industry，仅设备/浓缩/奶咖自动化/商用工作流，关键词过滤） |
 | A4 | **Barista Hustle** | `https://www.baristahustle.com/feed/`（`/blog/feed/` 实测 403，已改根路径） | 专业技术、萃取科学、培训、配方 | ✅ 已修复并启用（tech_experiment，差异化技术源） |
@@ -46,7 +46,7 @@
 | `tech_experiment`（技术实验） | Barista Hustle（Coffee Ad Astra 已停用） | 2 |
 | `independent_review`（独立测试） | CoffeeGeek | 1 |
 | `tutorial`（专业教程） | Clive Coffee（Whole Latte Love 已停用） | 1（单源即满，`quota_group=gear_tutorials` 保留） |
-| `industry`（行业媒体） | Daily Coffee News、Perfect Daily Grind、Sprudge | 2 |
+| `industry`（行业媒体） | Daily Coffee News、Perfect Daily Grind（Sprudge 已停用） | 2 |
 | `community`（社区） | Reddit r/espresso | 2 |
 | `official`（官方公告） | （暂无专源，事件触发） | 不硬限 |
 
@@ -58,6 +58,11 @@
 每个 `[[sources]]` 可带 `include_any`（标题+摘要至少命中其一，意式相关性闸门）与
 `exclude_any`（命中任一即丢弃，如晒图/购买咨询/健康/公平贸易），在 `fetch_all` 内于
 LLM 评估**之前**执行，避免把无关内容送进稀缺的 LLM/算力。详见 `config.example.toml` 各源配置。
+
+> **排除词匹配规则（2026-08-08 修复）**：纯英文 exclude 词按**全词边界**匹配
+> （`fetch.py:_kw_hit`，含常见复数），避免子串误杀——曾因 "tea" 命中 "steam"
+> 导致 Clive/CoffeeGeek 意式教程文整源被过滤（CI 日志 Clive 1→0 条）。
+> 词根意图词（如营养类）需在 config 显式列出 nutrition/nutritional/nutrient。
 
 ### 全文抓取白名单（`full_text`）
 

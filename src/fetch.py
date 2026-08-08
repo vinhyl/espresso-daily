@@ -213,9 +213,14 @@ def fetch_rss(source: dict, lookback_days: int = 3, tz=None,
 
     # 解析异常（feedparser bozo）：仅在确实无条目时记录，避免噪声
     if parsed.get("bozo") and parsed.get("bozo_exception") and not parsed.entries:
+        ctype = resp.headers.get("content-type", "")
+        # 响应头前 120 字符：CI 被反爬时返回 HTML 质询页/403 页而非 XML，
+        # 记下来便于区分「源挂了」与「被拦截」（见 2026-08-08 CI 日志 PDG/BH）
+        probe = re.sub(r"\s+", " ", resp.text or "")[:120]
         _record_failure(
             failures, source, source.get("url", ""),
-            Exception(f"feed parse error: {parsed['bozo_exception']}"),
+            Exception(f"feed parse error: {parsed['bozo_exception']} "
+                      f"[content-type={ctype} | body={probe!r}]"),
         )
 
     # cutoff 以目标时区的「今天」为基准，与归档日期同一时区，避免时区错位
@@ -294,6 +299,22 @@ def _record_failure(failures: list | None, source: dict, url: str, exc: Exceptio
     print(f"[fetch] 源 {name} 抓取/解析失败：{exc}")
 
 
+def _kw_hit(k: str, text: str) -> bool:
+    """exclude 关键词命中：纯英文单词用「全词边界」匹配，避免子串误杀。
+
+    2026-08-08 修复：exclude 里的 "tea" 会子串命中 "steam"/"teach"/"team"，
+    导致 Clive/CoffeeGeek 意式教程文（必讲蒸汽奶泡）被整源误杀（CI 日志
+    Clive 1→0 条）。全词边界 \btea\b 只匹配独立词 tea 及其复数 teas。
+    策略：exclude 宁可漏杀（漏掉的由 LLM 初筛/评分兜底）也不可误杀；
+    词根意图词（如 DCN 的 "nutrit"→nutrition）无法用全词边界覆盖，
+    已在 config 里显式展开为 nutrition/nutritional。
+    非纯字母词（短语/数字/中文）回退子串，保召回。
+    """
+    if re.fullmatch(r"[A-Za-z]+", k):
+        return re.search(rf"\b{re.escape(k)}(?:s|es)?\b", text) is not None
+    return k in text
+
+
 def _source_prefilter(source: dict, items: list[dict]) -> list[dict]:
     """按源的 include_any / exclude_any 关键词做二次过滤（不消耗 LLM）。
 
@@ -307,7 +328,7 @@ def _source_prefilter(source: dict, items: list[dict]) -> list[dict]:
     out = []
     for it in items:
         text = (it.get("title", "") + " " + it.get("summary", "")).lower()
-        if exc and any(k in text for k in exc):
+        if exc and any(_kw_hit(k, text) for k in exc):
             continue
         if inc and not any(k in text for k in inc):
             continue

@@ -78,7 +78,7 @@ type = "rss"
 url = "https://sprudge.com/feed"
 category_hint = "industry"          # 低频文化信号源，降为补充，不再承担日报数量
 lang = "en"
-enabled = true
+enabled = false   # 2026-08-08 实测（本机+CI 均 403）：Cloudflare JS 质询页「Just a moment...」，换 UA 无效，HTTP 客户端无法绕过；待源站放行或改走 RSSHub 再启用
 max_per_source = 1                  # 每期最多 1 条
 include_any = ["espresso", "machine", "grinder", "cafe", "roaster", "coffee", "barista", "latte", "cappuccino", "brew", "launch", "new", "review", "portafilter"]
 exclude_any = ["health", "wellness", "recipe", "food", "cocktail", "beer", "wine"]
@@ -102,7 +102,7 @@ lang = "en"
 enabled = true
 full_text = true                    # 全文白名单：初筛通过后抓原文正文，避免基于截断摘要虚构细节
 include_any = ["espresso", "espresso machine", "grinder", "extraction", "milk", "steaming", "latte", "cappuccino", "portafilter", "pressure", "commercial", "cafe", "roaster", "roasting", "coffee machine", "brew", "brewing", "supply", "oem", "launch", "new product", "product", "barista", "lever", "boiler", "introduc", "unveil", "acquire", "partnership"]
-exclude_any = ["fair trade", "health", "wellness", "nutrit", "benefit of coffee", "study finds"]
+exclude_any = ["fair trade", "health", "wellness", "nutrition", "nutritional", "nutrient", "benefit of coffee", "study finds"]
 
 [[sources]]
 name = "Barista Hustle"
