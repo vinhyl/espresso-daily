@@ -80,13 +80,25 @@ def _bilibili_parse(raw: dict, source: dict) -> list[dict]:
             # 去除搜索高亮标签 <em>
             aid = item.get("aid") or item.get("id")
             link = f"https://www.bilibili.com/video/av{aid}" if aid else ""
+            # 发布日期：优先 pubdate（Unix 秒，真实发布时间），缺失回退当天。
+            # 2026-08-08 修复：此前写死「今天」，导致旧视频伪装成新内容绕过 lookback 过滤
+            # （实测 2022/2023 年视频被判为当日收录）。
+            published = dt.datetime.now().strftime("%Y-%m-%d")
+            pub = item.get("pubdate") or item.get("senddate")
+            if pub:
+                try:
+                    published = datetime.fromtimestamp(
+                        int(pub), tz=zoneinfo.ZoneInfo("Asia/Shanghai")
+                    ).strftime("%Y-%m-%d")
+                except Exception:
+                    pass
             out.append({
                 "title": _clean(re.sub(r"<[^>]+>", "", title)),
                 "summary": _clean(re.sub(r"<[^>]+>", "", desc)),
                 "link": link,
                 # source_url = 文章/视频链接（去重、卡片来源链接用）
                 "source_url": link or source.get("url", ""),
-                "published": dt.datetime.now().strftime("%Y-%m-%d"),
+                "published": published,
                 "source": source["name"],
                 "lang": source.get("lang", ""), "hint": source.get("category_hint", "mixed"),
             })

@@ -615,6 +615,18 @@ def prescreen(item: dict, cfg: dict, hint: str = "mixed") -> dict:
             "reason": hard_reject, "engine": "hard-reject",
         }
 
+    # 摘要过短闸门（2026-08-08）：纯视频/无图文内容（摘要 < 40 字符）直接拒，
+    # 除非该源允许抓全文（full_text 白名单源，摘要只是截断，全文阶段会补正文）。
+    # 背景：B站搜索的纯视频条目 desc 常为空，仅靠标题相关性过 LLM 初筛，入选后正文空洞。
+    summary_len = len((item.get("summary") or "").strip())
+    if summary_len < 40 and not item.get("allow_full_text"):
+        ctype = HINT_TO_CONTENT_TYPE.get(hint, "news")
+        return {
+            "accept": False, "content_type": ctype, "espresso_core": False,
+            "reason": f"摘要过短（{summary_len} 字符），纯视频/无图文内容，无全文可补",
+            "engine": "hard-reject",
+        }
+
     if cfg.get("llm", {}).get("enabled"):
         res = _llm_prescreen(cfg, item, hint)
         if res is not None:
