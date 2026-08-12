@@ -121,6 +121,7 @@ url = "https://www.reddit.com/r/espresso/top/.rss?t=week"   # 改取 top 流，�
 category_hint = "community"          # 降级为社区补充，每期最多 2 条
 lang = "en"
 enabled = true
+full_text = true                    # 全文白名单：初筛通过后抓真实帖子正文再评，消除「只看 RSS 摘要误判」低质社区帖（见 score.passes_quality_gate）
 lookback_days = 3                     # 2026-08-06 由 7 收紧：周榜近 3 天已覆盖热帖，减少旧帖进池
 max_per_source = 2
 include_any = ["espresso", "machine", "grinder", "dial", "dose", "yield", "flow", "channel", "pressure", "temp", "pid", "mod", "build", "setup", "recipe", "extraction", "puck", "shot", "shots", "barista", "lever", "e61", "portafilter", "scale", "wdt", "distribution", "preinfusion", "steam", "milk", "grind", "burr", "9 bar", "9bar", "profiles", "profiling"]

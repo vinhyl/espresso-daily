@@ -181,6 +181,11 @@ DIM_LABELS: dict[str, str] = {
 # relevance 否决阈值：relevance 分 < 满分 × 此比例 → 直接判死
 RELEVANCE_VETO_RATIO = 0.5
 
+# 社区个案额外门槛（2026-08-12）：诊断/求助类若无结论、不可复现则不收，
+# 不论总分是否过 60 地板。遏制「路边捡到机器、这是什么黑颗粒」类低信息量帖。
+# 仅对 content_type=community_case 生效，其余类型仍只看全局 min_score，避免误伤。
+COMMUNITY_GATE = {"solution": 12, "reproducibility": 7}
+
 # ---------------------------------------------------------------------------
 # 中文源专用维度配置（2026-08-08：评分流程按语言彻底分离）
 # 中文流（B站/知乎等搜索源）与英文流（RSS 图文源）各自独立评分：
@@ -573,7 +578,10 @@ def _llm_prescreen(cfg: dict, item: dict, hint: str) -> dict | None:
         "4. 咖啡店商业/空间/人物：店铺开业展示(Build-Outs)、门店空间设计、非技术性人物访谈、品牌营销故事。\n"
         "5. 咖啡周边商品：咖啡渣再利用、咖啡主题周边（电脑包/杯具/服饰等）。\n"
         "6. 纯展示帖：晒机器/晒吧台/晒浓缩/晒拉花，无参数、无结论、无可复用信息。\n"
-        "7. 求助/选购咨询帖：无结论的「帮我选哪台」「值得买吗」「推荐一下」。\n"
+        "7. 求助/选购咨询帖：无结论的「帮我选哪台」「值得买吗」「推荐一下」；"
+        "以及无参数、无已尝试步骤、无结论的纯诊断/鉴定帖（如「机器流出黑色颗粒是什么」"
+        "「求判断故障/求鉴定机型」「路边捡到的机器能不能用」）——这类信息量低，"
+        "虽有具体机型也不收，归入社区个案低质形态。\n"
         "8. 维修/耐用性个案：单点故障/维修经历/售后吐槽（如轴承生锈、电机损坏），无调参价值、"
         "无可复用结论——即使机型本身是意式器具也拒。\n"
         "9. 广告/促销/软文/抽奖/优惠码。\n"
@@ -1233,6 +1241,31 @@ def _relevance_vetoed(j: Judgment) -> bool:
     if maxv <= 0:
         return False
     return j.dims["relevance"] < maxv * RELEVANCE_VETO_RATIO
+
+
+def passes_quality_gate(j: Judgment, min_score: int) -> tuple[bool, str]:
+    """内容类型差异化的收录门槛（2026-08-12）。
+
+    返回 (是否通过, 拒绝理由)。设计：
+    - 全局门槛：score < min_score 一律拒（沿用原逻辑）。
+    - community_case 额外子门槛：solution/reproducibility 任一低于 COMMUNITY_GATE
+      即拒，不论总分是否过线。依据是社区个案的价值在于「有结论 + 可复现」，
+      纯求助/无结论的诊断帖（如「除垢后流黑颗粒是什么」）即便 relevance 满也
+      不该进日报。该门是确定性的，不依赖 LLM 自觉，作为初筛的最后兜底。
+    - 其余 content_type 不受子门槛影响，避免误伤 news/expert/review 类。
+    """
+    if j.score < min_score:
+        return False, f"score {j.score} < {min_score}"
+    if j.content_type == "community_case":
+        dims = j.dims or {}
+        for dim, lo in COMMUNITY_GATE.items():
+            if dims.get(dim, 0) < lo:
+                return False, (
+                    f"社区个案无解/不可复现：{dim}={dims.get(dim, 0)} < {lo}"
+                    f"（solution≥{COMMUNITY_GATE['solution']} 且 "
+                    f"reproducibility≥{COMMUNITY_GATE['reproducibility']} 才收）"
+                )
+    return True, ""
 
 
 def judge(item: dict, cfg: dict, hint: str = "mixed", knowledge_ctx: str = "",

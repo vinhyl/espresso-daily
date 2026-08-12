@@ -287,10 +287,11 @@ def run(config_path: str = "config.toml", dry_run: bool = False, date_override: 
         _dims = j.dims or {}
         _ft = "全文" if it.get("full_text") else "摘要"
         _d = " | ".join(f"{k}={_dims.get(k, 0)}" for k in score_mod.dim_keys(j.content_type))
-        if j.score < min_score:
-            print(f"[pipeline] 精评拒 [{j.score}分<{min_score} | {_ft} | {_d}] "
-                  f"{it.get('source','')}：{it['title'][:60]}")
-            quality.record_reject(it, f"score {j.score} < {min_score}", "score")
+        ok, _why = score_mod.passes_quality_gate(j, min_score)
+        if not ok:
+            print(f"[pipeline] 精评拒 [{j.score}分 | {_ft} | {_d}] "
+                  f"{it.get('source','')}：{it['title'][:60]} —— {_why}")
+            quality.record_reject(it, _why, "score")
             n_score_reject += 1
             continue
         print(f"[pipeline] 精评过 [{j.score}分 | {_ft} | {_d}] {it.get('source','')}：{it['title'][:60]}")

@@ -119,10 +119,13 @@ class QualityReport:
         fail_by_src: dict[str, dict] = {}
         for fr in self.fetch_failures:
             nm = fr.get("source", "(unknown)")
-            d = fail_by_src.setdefault(nm, {"count": 0, "rate_limited": 0, "blocked": 0, "stages": {}})
+            d = fail_by_src.setdefault(
+                nm, {"count": 0, "rate_limited": 0, "blocked": 0, "waf": 0, "stages": {}}
+            )
             d["count"] += 1
             d["rate_limited"] += 1 if fr.get("rate_limited") else 0
             d["blocked"] += 1 if fr.get("blocked") else 0
+            d["waf"] += 1 if fr.get("error_type") == "waf_captcha" else 0
             st = fr.get("stage", "feed")
             d["stages"][st] = d["stages"].get(st, 0) + 1
         return {
@@ -228,10 +231,12 @@ class QualityReport:
             lines.append(f"- 失败总数：**{ff['total']}**")
             for nm, info in ff["by_source"].items():
                 flags = []
+                if info["waf"]:
+                    flags.append("被反爬 WAF 拦截（源站质询页，非源挂/非瞬时错误）")
+                elif info["blocked"]:
+                    flags.append("封禁")
                 if info["rate_limited"]:
                     flags.append("限流")
-                if info["blocked"]:
-                    flags.append("封禁")
                 flag_s = f"（{'/'.join(flags)}）" if flags else ""
                 stages = "、".join(f"{k}×{v}" for k, v in info["stages"].items())
                 lines.append(f"- {nm}{flag_s}：{info['count']} 次（{stages}）")

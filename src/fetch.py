@@ -323,13 +323,22 @@ def fetch_rss(source: dict, lookback_days: int = 3, tz=None,
     # 解析异常（feedparser bozo）：仅在确实无条目时记录，避免噪声
     if parsed.get("bozo") and parsed.get("bozo_exception") and not parsed.entries:
         ctype = resp.headers.get("content-type", "")
-        # 响应头前 120 字符：CI 被反爬时返回 HTML 质询页/403 页而非 XML，
+        # 响应体前 120 字符：CI 被反爬时返回 HTML 质询页/403 页而非 XML，
         # 记下来便于区分「源挂了」与「被拦截」（见 2026-08-08 CI 日志 PDG/BH）
         probe = re.sub(r"\s+", " ", resp.text or "")[:120]
+        # 反爬 WAF/captcha 识别：返回 HTML 质询页而非 XML（如 Sucuri sgcaptcha、
+        # <meta http-equiv="refresh"> 跳转、或 content-type 为 text/html 且无条目）。
+        # 这类属于「被反爬拦截」，与源挂/瞬时错误区分，且不应触发重试或降低标准。
+        body_l = (resp.text or "").lower()
+        is_waf = ("sgcaptcha" in body_l
+                  or 'http-equiv="refresh"' in body_l
+                  or (ctype.startswith("text/html") and not parsed.entries))
         _record_failure(
             failures, source, source.get("url", ""),
             Exception(f"feed parse error: {parsed['bozo_exception']} "
                       f"[content-type={ctype} | body={probe!r}]"),
+            blocked=is_waf,
+            error_type="waf_captcha" if is_waf else "parse_error",
         )
 
     # cutoff 以目标时区的「今天」为基准，与归档日期同一时区，避免时区错位
@@ -377,12 +386,16 @@ def _extract_engagement(entry: dict) -> int:
 
 
 def _record_failure(failures: list | None, source: dict, url: str, exc: Exception,
-                    stage: str = "feed") -> None:
+                    stage: str = "feed", blocked: bool | None = None,
+                    error_type: str | None = None) -> None:
     """把一次抓取/解析失败结构化为记录，累积进 failures 列表并打印。
 
     字段：source / url / stage / timestamp / error_type / status_code /
     rate_limited / blocked / message —— 供阶段二质量报告统计
     （每源失败率、是否限流、失败发生在 feed 还是 fulltext 阶段等）。
+
+    blocked / error_type 为可选覆盖参数：当调用方已能明确判定失败性质
+    （如 fetch_rss 识别到反爬 WAF 质询页）时传入，优先于按异常类型推导的默认值。
     """
     rec = {
         "source": source.get("name", "") if isinstance(source, dict) else str(source),
@@ -402,6 +415,11 @@ def _record_failure(failures: list | None, source: dict, url: str, exc: Exceptio
         rec["blocked"] = exc.response.status_code in (401, 403, 407, 429)
     elif isinstance(exc, httpx.HTTPError):
         rec["error_type"] = "http_error"
+    # 显式覆盖：调用方已判定失败性质（如 WAF 质询页）时优先
+    if blocked is not None:
+        rec["blocked"] = bool(blocked)
+    if error_type:
+        rec["error_type"] = error_type
     if failures is not None:
         failures.append(rec)
     name = rec["source"] or url
