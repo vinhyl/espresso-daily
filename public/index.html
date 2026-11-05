@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=1793477795">
+  <link rel="stylesheet" href="assets/style.css?v=1793916875">
 </head>
 <body>
   <div class="topbar"></div>
@@ -25,11 +25,11 @@
       <div class="mast-right">
         <div class="hero-stats">
           <div class="stat">
-            <span class="stat-num serif">91</span>
+            <span class="stat-num serif">94</span>
             <span class="stat-label mono">总篇数</span>
           </div>
           <div class="stat">
-            <span class="stat-num serif">39</span>
+            <span class="stat-num serif">41</span>
             <span class="stat-label mono">总期数</span>
           </div>
         </div>
@@ -49,20 +49,20 @@
     <div class="hero-main">
       <div class="hero-issue">
         <span class="hero-issue-dot"></span>
-        <span class="hero-issue-day serif">10.30</span>
+        <span class="hero-issue-day serif">11.06</span>
         <span class="hero-issue-meta">2026 · 周五</span>
       </div>
       <h1 class="hero-title">今日精选</h1>
       <p class="hero-sub">每日精选优质信源，0-100 评分标注信息浓度——分数越高，越值得先读；深度解读萃取每日精华。</p>
     </div>
     <aside class="hero-spec">
-      <span class="issue-badge mono">ISSUE 039</span>
+      <span class="issue-badge mono">ISSUE 041</span>
       <div class="spec-stats">
         <div class="spec-stat"><span class="ss-num serif">1</span><span class="ss-label mono">今日篇数</span></div>
         <div class="spec-stat"><span class="ss-num serif">0</span><span class="ss-label mono"><span class="dive-mark" aria-hidden="true"></span> 含深度解读</span></div>
-        <div class="spec-stat"><span class="ss-num serif">2<small>分钟</small></span><span class="ss-label mono">全文阅读</span></div>
+        <div class="spec-stat"><span class="ss-num serif">1<small>分钟</small></span><span class="ss-label mono">全文阅读</span></div>
       </div>
-      <a class="btn-ghost mono" href="days/2026-10-30.html">最新日报 <span aria-hidden="true">→</span></a>
+      <a class="btn-ghost mono" href="days/2026-11-06.html">最新日报 <span aria-hidden="true">→</span></a>
     </aside>
   </section>
 
@@ -75,23 +75,23 @@
 
       <article class="featured" id="e0">
   <header class="featured-head">
-    <span class="fh-score" aria-label="评分 90">90</span>
+    <span class="fh-score" aria-label="评分 71">71</span>
     <div class="fh-titlebox">
-      <h2 class="featured-title serif">用 ESP32 给 Delonghi Dedica 加装压力曲线与萃取记录</h2>
+      <h2 class="featured-title serif">600美元内家用意式组合：SK40磨豆机与Gemilai Owl实测</h2>
     </div>
   </header>
 
   <div class="featured-main">
     <div class="featured-meta mono">
-<span class="fm-source">来源：<a href="https://www.reddit.com/r/espresso/comments/1xjfxan/i_added_pressure_profiling_to_my_delonghi_dedica/" target="_blank" rel="noopener">Reddit r/espresso</a></span>    </div>
+<span class="fm-source">来源：<a href="https://www.reddit.com/r/espresso/comments/1xoogji/finally_happy_with_a_home_espresso_setup_under_600/" target="_blank" rel="noopener">Reddit r/espresso</a></span>    </div>
 
-    <div class="entry-body"><p>一位用户为入门机 Delonghi Dedica 自制压力曲线改装：在泵与冲煮头之间加 0–30 bar 压力传感器，泵的 230V 供电串入可控硅调光模块，由 ESP32 每秒多次读取压力并实时调节泵功率，实测可将压力稳定在 9 bar ±0.2 bar。不改动机器原有电路，按机器按钮启动，ESP32 仅在泵启动后介入。固件支持分段压力曲线（预浸、经典 9 bar、递减等），内置 3 条曲线并可自建，通过 ESP32 网页在平板上实时显示实测压力与目标曲线，支持 Wi-Fi 升级固件。每杯数据自动上传到家用服务器（Proxmox），记录压力曲线、目标值与泵功率；用户在平板上补录咖啡豆、研磨度、粉量、液重、温湿度及酸甜苦等感官评分，豆袋信息单独管理以追踪养豆期。磨豆建议目前是过渡方案：把历史数据与当日条件发给 Anthropic API 给出研磨/粉量/液重建议，后续计划换成基于自身数据的线性回归。下一步是加蓝牙秤实现自动液重、流量曲线与定重停止。</p></div>
+    <div class="entry-body"><p>前咖啡师兼烘焙师转行后，以不到600美元搭建家用意式站：SK40磨豆机+Gemilai Owl意式机。SK40锥刀磨豆机坚固、简单、安静、紧凑，同价位表现突出，出杯质量立即可用（对比其日常使用的4K EG1）。Owl做工略显廉价，预浸泡明显不足，但萃取扎实；最大亮点是蒸汽棒——作者称其水准可放到2000美元机器上而不违和，打微泡能力在同价位（&lt;500美元）无对手，优于Flair（清晰度）与Bambino Plus（一致性）的对比。作者仍属新装机，观点可能变化，但初步结论：600美元内磨豆机+意式机组合难有更好选择。</p></div>
 
   </div>
 </article>
 
 
-    <a class="today-strip" href="days/2026-10-30.html">
+    <a class="today-strip" href="days/2026-11-06.html">
   <div class="ts-head">
     <b class="ts-kicker mono">MORE</b>
     <span class="ts-kicker-sub mono">其他资讯</span>
@@ -99,13 +99,13 @@
   <div class="ts-body">
     <div class="ts-date">
       <span class="ts-today-label mono">今日</span>
-      <span class="ts-day serif">30</span>
+      <span class="ts-day serif">06</span>
     </div>
     <div class="ts-mid">
       <p class="ts-none mono">精选全文已在上方展示</p>
     </div>
     <div class="ts-go">
-      <div class="ts-ct mono"><span>1 篇 · <span class="dive-mark" aria-hidden="true"></span> 0 篇含深度解读</span><span>全文约 2 分钟</span></div>
+      <div class="ts-ct mono"><span>1 篇 · <span class="dive-mark" aria-hidden="true"></span> 0 篇含深度解读</span><span>全文约 1 分钟</span></div>
       <span class="ts-arrow">进入今日日报 <span aria-hidden="true">→</span></span>
     </div>
   </div>
@@ -120,6 +120,41 @@
       <span class="sec-rule"></span>
     </div>
     <div class="recent-grid">
+        <a class="dcard" href="days/2026-11-05.html">
+  <div class="dcard-date">
+    <span class="dcard-d serif">11.05</span>
+    <span class="dcard-wd mono">周四</span>
+  </div>
+  <div class="dcard-body">
+<div class="dcard-headline serif">加拿大豆单实测分享，Bengle 72 秒预热重新定义开机速度</div>    <ul class="dcard-list">
+      <li><span class="dl-t">Bambino Plus 配 DF54 的加拿大咖啡豆研磨度实测分享</span></li>
+      <li><span class="dl-t">Decent Bengle 预热 72 秒可萃取，再等 20 秒可打奶泡</span></li>
+    </ul>
+    <div class="dcard-foot mono">
+      <span class="df-left">
+<span class="df-score" title="当日最高分" aria-label="当日最高分 75">当日最高 75</span>      </span>
+      <span class="dcard-go">阅读全文 →</span>
+    </div>
+  </div>
+</a>
+
+        <a class="dcard" href="days/2026-10-30.html">
+  <div class="dcard-date">
+    <span class="dcard-d serif">10.30</span>
+    <span class="dcard-wd mono">周五</span>
+  </div>
+  <div class="dcard-body">
+<div class="dcard-headline serif">用 ESP32 给德龙 Dedica 加压力曲线，并记录萃取历史</div>    <ul class="dcard-list">
+      <li><span class="dl-t">用 ESP32 给 Delonghi Dedica 加装压力曲线与萃取记录</span></li>
+    </ul>
+    <div class="dcard-foot mono">
+      <span class="df-left">
+<span class="df-score" title="当日最高分" aria-label="当日最高分 90">当日最高 90</span>      </span>
+      <span class="dcard-go">阅读全文 →</span>
+    </div>
+  </div>
+</a>
+
         <a class="dcard" href="days/2026-10-28.html">
   <div class="dcard-date">
     <span class="dcard-d serif">10.28</span>
@@ -190,41 +225,6 @@
   </div>
 </a>
 
-        <a class="dcard" href="days/2026-10-22.html">
-  <div class="dcard-date">
-    <span class="dcard-d serif">10.22</span>
-    <span class="dcard-wd mono">周四</span>
-  </div>
-  <div class="dcard-body">
-<div class="dcard-headline serif">Weber Workshops 全面重构旗舰 EG-1 单剂量磨豆机</div>    <ul class="dcard-list">
-      <li><span class="dl-t">猫形拉花技巧：60℃奶泡与双层杯的配合</span></li>
-      <li><span class="dl-t">Weber Workshops 全面重新设计旗舰 EG-1 磨豆机</span></li>
-    </ul>
-    <div class="dcard-foot mono">
-      <span class="df-left">
-<span class="df-score" title="当日最高分" aria-label="当日最高分 71">当日最高 71</span>      </span>
-      <span class="dcard-go">阅读全文 →</span>
-    </div>
-  </div>
-</a>
-
-        <a class="dcard" href="days/2026-10-21.html">
-  <div class="dcard-date">
-    <span class="dcard-d serif">10.21</span>
-    <span class="dcard-wd mono">周三</span>
-  </div>
-  <div class="dcard-body">
-<div class="dcard-headline serif">二手 E61 配 DF64：从 Silvia 升级的高性价比方案</div>    <ul class="dcard-list">
-      <li><span class="dl-t">从 Silvia V6 升级到 969.coffee Elba Mini Lux：二手 E61 配 DF64 Gen 2</span></li>
-    </ul>
-    <div class="dcard-foot mono">
-      <span class="df-left">
-<span class="df-score" title="当日最高分" aria-label="当日最高分 78">当日最高 78</span>      </span>
-      <span class="dcard-go">阅读全文 →</span>
-    </div>
-  </div>
-</a>
-
     </div>
   </section>
 </main>
@@ -236,6 +236,6 @@
     </div>
   </footer>
 
-  <script src="assets/app.js?v=1793477795"></script>
+  <script src="assets/app.js?v=1793916875"></script>
 </body>
 </html>
