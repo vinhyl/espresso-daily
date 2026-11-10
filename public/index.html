@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=1794170676">
+  <link rel="stylesheet" href="assets/style.css?v=1794270265">
 </head>
 <body>
   <div class="topbar"></div>
@@ -25,11 +25,11 @@
       <div class="mast-right">
         <div class="hero-stats">
           <div class="stat">
-            <span class="stat-num serif">96</span>
+            <span class="stat-num serif">97</span>
             <span class="stat-label mono">总篇数</span>
           </div>
           <div class="stat">
-            <span class="stat-num serif">42</span>
+            <span class="stat-num serif">43</span>
             <span class="stat-label mono">总期数</span>
           </div>
         </div>
@@ -49,20 +49,20 @@
     <div class="hero-main">
       <div class="hero-issue">
         <span class="hero-issue-dot"></span>
-        <span class="hero-issue-day serif">11.08</span>
-        <span class="hero-issue-meta">2026 · 周日</span>
+        <span class="hero-issue-day serif">11.09</span>
+        <span class="hero-issue-meta">2026 · 周一</span>
       </div>
       <h1 class="hero-title">今日精选</h1>
       <p class="hero-sub">每日精选优质信源，0-100 评分标注信息浓度——分数越高，越值得先读；深度解读萃取每日精华。</p>
     </div>
     <aside class="hero-spec">
-      <span class="issue-badge mono">ISSUE 042</span>
+      <span class="issue-badge mono">ISSUE 043</span>
       <div class="spec-stats">
         <div class="spec-stat"><span class="ss-num serif">1</span><span class="ss-label mono">今日篇数</span></div>
         <div class="spec-stat"><span class="ss-num serif">0</span><span class="ss-label mono"><span class="dive-mark" aria-hidden="true"></span> 含深度解读</span></div>
         <div class="spec-stat"><span class="ss-num serif">2<small>分钟</small></span><span class="ss-label mono">全文阅读</span></div>
       </div>
-      <a class="btn-ghost mono" href="days/2026-11-08.html">最新日报 <span aria-hidden="true">→</span></a>
+      <a class="btn-ghost mono" href="days/2026-11-09.html">最新日报 <span aria-hidden="true">→</span></a>
     </aside>
   </section>
 
@@ -75,23 +75,25 @@
 
       <article class="featured" id="e0">
   <header class="featured-head">
-    <span class="fh-score" aria-label="评分 90">90</span>
+    <span class="fh-score" aria-label="评分 67">67</span>
     <div class="fh-titlebox">
-      <h2 class="featured-title serif">用 Claude 逆向 Mahlkönig E65S GbW 固件：屏幕显示实际出粉量</h2>
+      <h2 class="featured-title serif">Ascaso Steel Duo Plus V3 长期使用评测：双热块优点与几处不足</h2>
     </div>
   </header>
 
   <div class="featured-main">
     <div class="featured-meta mono">
-<span class="fm-source">来源：<a href="https://www.reddit.com/r/espresso/comments/1xqtimd/my_e65s_gbw_refused_to_show_what_it_actually/" target="_blank" rel="noopener">Reddit r/espresso</a></span>    </div>
+<span class="fm-source">来源：<a href="https://www.reddit.com/r/espresso/comments/1xr8qas/ascaso_steel_duo_plus_v3_a_lot_of_hits_a_few/" target="_blank" rel="noopener">Reddit r/espresso</a></span>    </div>
 
-    <div class="entry-body"><p>用户抱怨 Mahlkönig E65S GbW 磨豆机屏幕只显示配方目标值（如设 20.0g 就显示 20.0g），不显示实际出粉量（如 20.14g），且 shot log 需 owner mode 登录才能查看，菜单里无开关可关。作者把 Mahlkönig 官方 SW300 更新文件交给 Claude 反汇编主控固件，发现实际测得重量就在内存中，改一条指令指向实测值后屏幕即显示真实出粉量；shot log 菜单项被 owner only 级别隐藏，改两个字节后对所有人可见（错误与服务日志仍锁）。此外磨豆机记录每杯的目标、实际、研磨时间但不记刻度盘距离（研磨设置），作者利用每条记录中 GbW 模式未使用的 4 字节字段，用钩子写入当前刻度盘距离，使每杯日志都带研磨设置。共改动 36 字节，通过磨豆机自带 Wi-Fi 更新器刷入，刷回官方文件即可回滚。视频演示目标 20.0g、实际 19.5g，屏幕显示 19.5（原厂会显示 20.0）；作者称 0.5g 偏差较大是因研磨结束时豆仓快空了。仓库含校验原厂 SW300 文件并打补丁的脚本，并记录每个改动字节及发现方式。作者自述是 vibe coder 而非固件工程师，仅在自用一台 SW300 版 E65S GbW 上验证，E80 用同一更新包但无人试过；刷机可能变砖、失保修，风险自负。</p></div>
+    <div class="entry-body"><p>用户从 Breville Barista Express 升级到 Ascaso Steel Duo Plus（V2.5/V3），搭配 Mahlkoning E64 WS 磨豆机。换机主因：连续出杯一致性差（第一杯 38g/27s，第二杯仅 17s），以及蒸汽慢、等待升温降温耗时。选机时对比了 Elizabeth3、Profitec Move 1.0/2.0、Arkel Coast 和 Ascaso；Arkel 做工与 1L 蒸汽锅炉更强，但体积大、55 磅重、顶部加水不便，最终选 Ascaso，并享 10% 折扣。</p>
+<p>优点：金属拨杆手感好、胡桃木装饰、做工扎实；热块升温快，热水随取；流量计移到 OPV 另一侧后，体积计量一致性大幅提升，实测连续出杯误差约 2g；蒸汽更强更快，可边萃取边打奶；侧取水箱加水方便；耗水少，水箱和滴水盘更省心；附 2 个手柄（分流/无底）和 5 个粉碗（7/14/18/21g+盲碗）。</p>
+<p>缺点：无滴水盘浮标；两个程序键共用同一预浸泡设置，无法单独设快速冲洗；18g 粉碗开口几何与其余粉碗不同，第三方压粉器、粉饼滤网和布粉工具不兼容；缺少 BBE 式滴水盘后粉碗收纳。</p></div>
 
   </div>
 </article>
 
 
-    <a class="today-strip" href="days/2026-11-08.html">
+    <a class="today-strip" href="days/2026-11-09.html">
   <div class="ts-head">
     <b class="ts-kicker mono">MORE</b>
     <span class="ts-kicker-sub mono">其他资讯</span>
@@ -99,7 +101,7 @@
   <div class="ts-body">
     <div class="ts-date">
       <span class="ts-today-label mono">今日</span>
-      <span class="ts-day serif">08</span>
+      <span class="ts-day serif">09</span>
     </div>
     <div class="ts-mid">
       <p class="ts-none mono">精选全文已在上方展示</p>
@@ -120,6 +122,23 @@
       <span class="sec-rule"></span>
     </div>
     <div class="recent-grid">
+        <a class="dcard" href="days/2026-11-08.html">
+  <div class="dcard-date">
+    <span class="dcard-d serif">11.08</span>
+    <span class="dcard-wd mono">周日</span>
+  </div>
+  <div class="dcard-body">
+<div class="dcard-headline serif">磨豆机固件被破解：E65S GbW 剂量显示与出粉日志改造</div>    <ul class="dcard-list">
+      <li><span class="dl-t">用 Claude 逆向 Mahlkönig E65S GbW 固件：屏幕显示实际出粉量</span></li>
+    </ul>
+    <div class="dcard-foot mono">
+      <span class="df-left">
+<span class="df-score" title="当日最高分" aria-label="当日最高分 90">当日最高 90</span>      </span>
+      <span class="dcard-go">阅读全文 →</span>
+    </div>
+  </div>
+</a>
+
         <a class="dcard" href="days/2026-11-06.html">
   <div class="dcard-date">
     <span class="dcard-d serif">11.06</span>
@@ -208,23 +227,6 @@
   </div>
 </a>
 
-        <a class="dcard" href="days/2026-10-24.html">
-  <div class="dcard-date">
-    <span class="dcard-d serif">10.24</span>
-    <span class="dcard-wd mono">周六</span>
-  </div>
-  <div class="dcard-body">
-<div class="dcard-headline serif">60 美元淘出整套意式浓缩设备：二手咖啡机与改装磨豆机</div>    <ul class="dcard-list">
-      <li><span class="dl-t">60美元淘来的意式浓缩全套设备：二手 Breville Cafe Roma 改装方案</span></li>
-    </ul>
-    <div class="dcard-foot mono">
-      <span class="df-left">
-<span class="df-score" title="当日最高分" aria-label="当日最高分 65">当日最高 65</span>      </span>
-      <span class="dcard-go">阅读全文 →</span>
-    </div>
-  </div>
-</a>
-
     </div>
   </section>
 </main>
@@ -236,6 +238,6 @@
     </div>
   </footer>
 
-  <script src="assets/app.js?v=1794170676"></script>
+  <script src="assets/app.js?v=1794270265"></script>
 </body>
 </html>
